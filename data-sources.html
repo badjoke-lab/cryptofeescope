@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Sources • CryptoFeeScope</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand">
+        <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
+        <div>
+          <div>CryptoFeeScope</div>
+          <div style="font-size:11px;color:var(--muted);">Planned data sources (free tier)</div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <a href="./index.html" class="btn" style="text-decoration:none;">← Back</a>
+      <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+    </div>
+  </header>
+
+  <main class="single">
+      <div class="card">
+        <div class="inner">
+          <h2 style="margin-top:0;">Data Sources (planned)</h2>
+          <p>
+            In this preview build, CryptoFeeScope uses fixed mock data only.
+            The goal is to first stabilize the UI and logic.  
+            In later phases, the dashboard will fetch real values from
+            public gas/fee APIs, primarily on free plans.
+          </p>
+
+          <h3>Candidate APIs</h3>
+          <ul>
+            <li>Bitcoin family: mempool.space API</li>
+            <li>Ethereum / BSC / Polygon: gasprice.io, Blocknative Gas Estimator</li>
+            <li>Solana / TRON / XRP: official endpoints or OKLink API</li>
+            <li>Multi-chain aggregators: DefiLlama API, GasFees and similar services</li>
+          </ul>
+
+          <p class="hint">
+            Once live data is wired in, each row will display not only the fee and speed,
+            but also the underlying data source and the exact fetch timestamp,
+            so users can see how fresh the values are.
+          </p>
+        </div>
+      </div>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"
+          viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
+        <strong>CryptoFeeScope</strong>
+      </div>
+      <div style="margin-top:6px">
+        <a href="./index.html" style="color:var(--muted)">Home</a> ·
+        <a href="./about.html" style="color:var(--muted)">About</a> ·
+        <a href="./donate.html" style="color:var(--muted)">Donate</a> ·
+        <a href="./disclaimer.html" style="color:var(--muted)">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function initTheme(){
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const saved = localStorage.getItem('theme');
+      const theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+
+      const themeBtn = document.getElementById('themeBtn');
+      if (themeBtn){
+        themeBtn.addEventListener('click', () => {
+          const now = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', now);
+          localStorage.setItem('theme', now);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

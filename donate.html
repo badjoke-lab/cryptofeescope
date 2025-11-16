@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Donate • CryptoFeeScope</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand">
+        <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
+        <div>
+          <div>CryptoFeeScope</div>
+          <div style="font-size:11px;color:var(--muted);">Support this free dashboard</div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <a href="./index.html" class="btn" style="text-decoration:none;">← Back</a>
+      <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+    </div>
+  </header>
+
+  <!-- ★ サブページは main.single にしてレイアウトを広げる -->
+  <main class="single">
+      <div class="card">
+        <div class="inner">
+          <h2 style="margin-top:0;margin-bottom:6px;">Support this project</h2>
+          <p style="margin-top:0;margin-bottom:10px;font-size:14px;color:var(--muted);">
+            CryptoFeeScope is planned as a free, ad-light tool.  
+            If it helps you choose cheaper or faster networks, you can support development via the wallets below.
+          </p>
+
+          <!-- Ko-fi dummy button (enable after Ko-fi account is ready) -->
+          <!--
+          <p style="margin:10px 0;">
+            <a href="https://ko-fi.com/your-kofi-id" class="btn btn-primary" style="text-decoration:none;">
+              ☕ Support on Ko-fi
+            </a>
+          </p>
+          -->
+
+          <h3 style="margin-top:18px;">Donation wallets</h3>
+          <p class="hint" style="margin-bottom:10px;">
+            These addresses are dedicated wallets for CryptoFeeScope.  
+            Please double-check the asset and network before sending.
+          </p>
+
+          <table style="width:100%;border-collapse:separate;border-spacing:0;">
+            <thead>
+              <tr>
+                <th style="text-align:left;font-size:12px;color:var(--muted);padding:8px 4px;">Asset</th>
+                <th style="text-align:left;font-size:12px;color:var(--muted);padding:8px 4px;">Network</th>
+                <th style="text-align:left;font-size:12px;color:var(--muted);padding:8px 4px;">Address</th>
+                <th style="text-align:right;font-size:12px;color:var(--muted);padding:8px 4px;">Copy</th>
+              </tr>
+            </thead>
+            <tbody id="walletBody">
+              <tr>
+                <td class="mono">BTC</td>
+                <td class="mono">Bitcoin (L1)</td>
+                <td class="mono wallet-text">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="BTC">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">ETH</td>
+                <td class="mono">Ethereum (ERC-20)</td>
+                <td class="mono wallet-text">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="ETH">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">USDT</td>
+                <td class="mono">Ethereum (ERC-20)</td>
+                <td class="mono wallet-text">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="USDT-ERC20">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">USDC</td>
+                <td class="mono">Ethereum (ERC-20)</td>
+                <td class="mono wallet-text">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="USDC-ERC20">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">SOL</td>
+                <td class="mono">Solana</td>
+                <td class="mono wallet-text">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="SOL">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">BNB</td>
+                <td class="mono">BNB Smart Chain (BEP-20)</td>
+                <td class="mono wallet-text">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="BNB-BEP20">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">DOGE</td>
+                <td class="mono">Dogecoin</td>
+                <td class="mono wallet-text">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="DOGE">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">AVAX</td>
+                <td class="mono">Avalanche C-Chain</td>
+                <td class="mono wallet-text">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="AVAX-C">Copy</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="mono">XRP</td>
+                <td class="mono">XRP Ledger</td>
+                <td class="mono wallet-text">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</td>
+                <td style="text-align:right;">
+                  <button class="btn copy-btn" data-asset="XRP">Copy</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="hint" style="margin-top:10px;">
+            Click “Copy” to copy the address to your clipboard.
+          </p>
+        </div>
+      </div>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"
+          viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
+        <strong>CryptoFeeScope</strong>
+      </div>
+      <div style="margin-top:6px">
+        <a href="./index.html" style="color:var(--muted)">Home</a> ·
+        <a href="./about.html" style="color:var(--muted)">About</a> ·
+        <a href="./data-sources.html" style="color:var(--muted)">Data Sources</a> ·
+        <a href="./disclaimer.html" style="color:var(--muted)">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle (same as index)
+    (function initTheme(){
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const saved = localStorage.getItem('theme');
+      const theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+
+      const themeBtn = document.getElementById('themeBtn');
+      if (themeBtn){
+        themeBtn.addEventListener('click', () => {
+          const now = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', now);
+          localStorage.setItem('theme', now);
+        });
+      }
+    })();
+
+    // Copy buttons
+    document.querySelectorAll('.copy-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const tr = btn.closest('tr');
+        if (!tr) return;
+        const textEl = tr.querySelector('.wallet-text');
+        if (!textEl) return;
+        const addr = textEl.textContent.trim();
+        try{
+          await navigator.clipboard.writeText(addr);
+          btn.textContent = 'Copied!';
+          setTimeout(()=>{ btn.textContent = 'Copy'; }, 1200);
+        }catch(e){
+          btn.textContent = 'Failed';
+          setTimeout(()=>{ btn.textContent = 'Copy'; }, 1200);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

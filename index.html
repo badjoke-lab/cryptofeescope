@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <title>CryptoFeeScope – L1 / L2 fee & latency snapshot</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand">
+        <img src="assets/logo.svg" alt="CryptoFeeScope logo">
+        <div>
+          <div>CryptoFeeScope</div>
+          <div class="sub">L1 / L2 fee &amp; latency snapshot</div>
+        </div>
+      </div>
+      <div class="pill" id="status">Updated —</div>
+      <div class="spacer"></div>
+      <div class="toolbar">
+        <!-- Refresh = 緑のボタン -->
+        <button id="refreshBtn" class="btn btn-primary" type="button">
+          <span class="icon" aria-hidden="true">🔄</span>
+          <span class="label">Refresh</span>
+        </button>
+        <!-- Donate = ゴーストボタン -->
+        <a href="donate.html" class="btn btn-ghost">
+          <span class="icon" aria-hidden="true">💎</span>
+          <span class="label">Donate</span>
+        </a>
+        <!-- Theme toggle（絵文字のみ） -->
+        <button id="themeBtn" class="btn btn-ghost" type="button" aria-label="Toggle theme">
+          <span class="icon" aria-hidden="true">🌞</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="cards">
+      <!-- Search / Filter -->
+      <article class="card">
+        <div class="inner">
+          <h2>Search / Filter</h2>
+
+          <div class="search">
+            <input
+              id="q"
+              type="search"
+              placeholder="Search chain or ticker (e.g., Ethereum, BTC, Solana)"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="filters">
+            <select id="priority">
+              <option value="standard" selected>Priority: Standard</option>
+              <option value="economy" disabled>Priority: Economy (future)</option>
+              <option value="express" disabled>Priority: Express (future)</option>
+            </select>
+
+            <!-- ★ フィアット選択はここ（Searchカード内） -->
+            <select id="fiat">
+              <option value="USD" selected>Currency: USD</option>
+              <option value="JPY">Currency: JPY</option>
+            </select>
+          </div>
+
+          <p class="hint">
+            Type a chain name or ticker to filter. The fee column is converted into the fiat currency
+            selected above.
+          </p>
+        </div>
+      </article>
+
+      <!-- Table -->
+      <article class="card">
+        <div class="inner">
+          <table>
+            <thead>
+              <tr>
+                <th>Chain</th>
+                <th>Ticker</th>
+                <th id="feeHeader">Fee (USD)</th>
+                <th>Speed (est.)</th>
+                <th>Status</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <!-- JS で描画 -->
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- Phase3: Fee history preview card -->
+    <section class="card cfs-history-card">
+      <div class="inner">
+        <div class="cfs-history-header">
+          <div class="cfs-history-title">Fee history (preview)</div>
+          <div class="cfs-history-controls">
+            <label for="historyChain" class="cfs-history-label">Chain:</label>
+            <select id="historyChain" class="cfs-history-select">
+              <option value="bitcoin">Bitcoin (L1)</option>
+              <option value="ethereum">Ethereum (L1)</option>
+              <option value="arbitrum">Arbitrum (L2)</option>
+              <option value="optimism">Optimism (L2)</option>
+              <option value="solana">Solana</option>
+            </select>
+          </div>
+        </div>
+        <canvas id="historyCanvas"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="5" ry="5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="10" cy="11" r="1.4" />
+          <circle cx="14" cy="11" r="1.4" />
+          <path d="M8 15c1 .9 2.1 1.4 3.9 1.4S15.8 15.9 17 15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <span>CryptoFeeScope</span>
+        <span>· preview build</span>
+      </div>
+      <div class="links">
+        <a href="about.html">About</a> ·
+        <a href="data-sources.html">Data Sources</a> ·
+        <a href="donate.html">Donate</a> ·
+        <a href="disclaimer.html">Disclaimer</a>
+      </div>
+      <div class="note">
+        Data is for reference only. Actual transaction costs and confirmation times may vary.
+      </div>
+    </div>
+  </footer>
+
+  <script src="feeFormat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

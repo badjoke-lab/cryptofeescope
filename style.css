@@ -1,0 +1,363 @@
+/* ========== CryptoFeeScope — Phase1 UI ========== */
+
+:root{
+  --bg:#F9FAFB;          /* base background */
+  --card:#FFFFFF;        /* surfaces */
+  --fg:#111827;          /* primary text */
+  --muted:#6B7280;       /* secondary text */
+  --line:#E5E7EB;        /* borders */
+  --accent:#00C896;      /* brand accent mint (Refresh) */
+  --accent-strong:#00E0A2;
+  --good:#10B981;        /* status fast */
+  --warn:#F59E0B;        /* status avg */
+  --bad:#EF4444;         /* status slow */
+  --shadow:0 6px 20px rgba(17,24,39,0.06);
+  --glow:0 0 0px rgba(0,200,150,0); /* animated */
+  --btn-text-strong:#ffffff;
+}
+
+[data-theme="dark"]{
+  --bg:#0F172A;          /* slate-900 */
+  --card:#1E293B;        /* slate-800 */
+  --fg:#F1F5F9;          /* slate-100 */
+  --muted:#94A3B8;       /* slate-400 */
+  --line:#2B3647;
+  --accent:#00E0A2;
+  --accent-strong:#00FFC0;
+  --shadow:0 10px 24px rgba(0,0,0,0.25);
+  --glow:0 0 0px rgba(0,224,162,0);
+  --btn-text-strong:#e6fff7;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font:14px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial;
+  -webkit-font-smoothing:antialiased;
+}
+
+a{
+  color:inherit;
+}
+
+/* ヘッダーのボタンリンクだけは下線なし */
+.toolbar a,
+a.btn{
+  text-decoration:none;
+}
+
+/* Header */
+header{
+  position:sticky; top:0; z-index:10;
+  background:linear-gradient(to bottom, rgba(249,250,251,.9), rgba(249,250,251,.6));
+  backdrop-filter:saturate(1.1) blur(6px);
+  border-bottom:1px solid var(--line);
+}
+[data-theme="dark"] header{
+  background:linear-gradient(to bottom, rgba(15,23,42,.9), rgba(15,23,42,.6));
+}
+.bar{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:12px;
+  align-items:center;
+  max-width:1100px;
+  margin:0 auto;
+  padding:10px 16px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:700;
+  letter-spacing:.2px;
+}
+.brand img{width:22px;height:22px}
+.brand .sub{
+  font-size:12px;
+  color:var(--muted);
+}
+.pill{
+  font-size:12px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:2px 8px;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.spacer{flex:1}
+.toolbar{
+  display:flex;
+  gap:8px;
+}
+
+/* Buttons */
+.btn{
+  appearance:none;
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--fg);
+  padding:6px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  font:inherit;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+.btn:hover{border-color:var(--accent)}
+.btn-primary{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:var(--btn-text-strong);
+  font-weight:600;
+}
+.btn-primary:hover{
+  background:var(--accent-strong);
+}
+.btn-ghost{
+  background:transparent;
+  border-color:var(--line);
+  color:var(--fg);
+}
+.btn-ghost:hover{
+  border-color:var(--accent);
+}
+.btn.small{
+  padding:4px 8px;
+  font-size:12px;
+}
+.btn.full{
+  width:100%;
+}
+.btn .icon{margin-right:2px}
+
+/* Layout */
+main{
+  max-width:1100px;
+  margin:16px auto;
+  padding:0 16px 24px;
+}
+.cards{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+@media(min-width:900px){
+  .cards{grid-template-columns: 1fr 2fr;}
+}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:var(--shadow);
+}
+.card .inner{padding:14px}
+
+/* Search & filters */
+.search{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.filters{
+  display:flex;
+  gap:10px;
+  margin-top:8px;
+}
+input[type="search"],
+select{
+  width:100%;
+  background:transparent;
+  border:1px solid var(--line);
+  color:var(--fg);
+  padding:10px 12px;
+  border-radius:10px;
+  outline:0;
+}
+.hint{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:8px;
+}
+
+/* Table */
+table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+}
+thead th{
+  font-size:12px;
+  text-align:left;
+  color:var(--muted);
+  font-weight:600;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  position:sticky;
+  top:0;
+  background:var(--card);
+}
+tbody td{
+  padding:12px;
+  border-bottom:1px solid var(--line);
+  vertical-align:middle;
+}
+tbody tr:hover{
+  background:rgba(0,200,150,0.08);
+}
+[data-theme="dark"] tbody tr:hover{
+  background:rgba(0,224,162,0.09);
+}
+.mono{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+.fee{font-weight:700}
+.updated{
+  font-size:12px;
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+/* Status tag */
+.tag{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  font-size:12px;
+  color:var(--muted);
+}
+.tag.good{
+  color:#0a3;
+  border-color:rgba(16,185,129,.35);
+}
+.tag.warn{
+  color:#b36a00;
+  border-color:rgba(245,158,11,.35);
+}
+.tag.bad{
+  color:#b00;
+  border-color:rgba(239,68,68,.35);
+}
+
+/* Refresh glow（旧 rowglow / 新 row-glow 両対応） */
+.rowglow{
+  box-shadow: var(--glow);
+  transition: box-shadow .6s ease;
+}
+.rowglow.on{
+  box-shadow: 0 0 0 4px rgba(0,200,150,.25);
+}
+[data-theme="dark"] .rowglow.on{
+  box-shadow: 0 0 0 4px rgba(0,224,162,.25);
+}
+
+/* 新JS用クラス（cfs-row / row-glow） */
+.cfs-row.row-glow{
+  box-shadow: var(--glow);
+  transition: box-shadow .6s ease;
+}
+[data-theme="dark"] .cfs-row.row-glow{
+  box-shadow: 0 0 0 4px rgba(0,224,162,.25);
+}
+
+/* Footer */
+footer{
+  color:var(--muted);
+  border-top:1px solid var(--line);
+}
+footer .inner{
+  max-width:1100px;
+  margin:0 auto;
+  padding:16px;
+  font-size:12px;
+}
+.logo{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:4px;
+}
+.logo svg{width:22px;height:22px}
+footer .links a{
+  text-decoration:underline;
+}
+footer .note{
+  margin-top:4px;
+}
+
+/* Utility */
+.hidden{display:none!important}
+
+/* Responsive tweaks */
+@media(max-width:768px){
+  .brand .sub{display:none;}        /* 見出しを詰める */
+  .bar{padding-inline:12px;}
+  .toolbar{gap:6px;}
+}
+
+@media(max-width:480px){
+  thead th,
+  tbody td{padding:10px;}
+  .updated::before{
+    content:"🕒 ";
+    margin-right:2px;
+  }
+
+  /* モバイル時は絵文字のみ表示 → 1段に収める */
+  .btn .label{display:none;}
+  .btn{padding-inline:8px;}
+
+  .filters{
+    flex-direction:column;
+  }
+}
+
+/* ========== Phase3: history chart ========== */
+
+.cfs-history-card{
+  margin-top:16px;
+}
+
+.cfs-history-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.cfs-history-title{
+  font-size:14px;
+  font-weight:600;
+}
+
+.cfs-history-controls{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+}
+
+.cfs-history-select{
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:transparent;
+  font-size:12px;
+  color:var(--fg);
+}
+
+#historyCanvas{
+  width:100%;
+  min-height:120px;
+  display:block;
+}
+
