@@ -265,7 +265,7 @@ function setupFeeTooltipHandler(){
     // ★ ポップアップは常にライトグレーで固定（テーマ無視）
     tooltip.style.background = '#f3f4f6';          // light gray
     tooltip.style.color = '#111827';               // almost black
-    tooltip.style.border = '1px solid #d1d5db';    // gray-300
+    tooltip.style.border = '1px solid '#d1d5db';    // gray-300
     tooltip.style.borderRadius = '8px';
     tooltip.style.padding = '8px 10px';
     tooltip.style.fontSize = '12px';
@@ -426,6 +426,20 @@ function renderHistoryChart(){
   ctx.stroke();
 }
 
+// ----- Supabase へ snapshot を永続化するトリガー -----
+
+async function pushHistory(){
+  try {
+    // フロントからトリガーするだけ。中で snapshot を取り直して Supabase に保存する。
+    await fetch('/api/push-history', {
+      method: 'POST'
+    });
+  } catch (err) {
+    console.error('push-history error', err);
+    // ここで UI エラーは出さない（保存失敗してもダッシュボード自体は動かす）
+  }
+}
+
 // ----- リフレッシュ -----
 
 async function refreshOnce({showGlow=true} = {}){
@@ -440,6 +454,9 @@ async function refreshOnce({showGlow=true} = {}){
 
     // 履歴も更新（グラフ用）
     fetchHistory().catch(()=>{});
+
+    // Supabase への永続化をトリガー（失敗しても UI はそのまま）
+    pushHistory().catch(()=>{});
 
     setStatus('Updated ' + nowTime());
     if (showGlow) glowRows();
