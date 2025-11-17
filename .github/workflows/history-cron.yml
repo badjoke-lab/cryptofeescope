@@ -1,0 +1,26 @@
+name: Push fee history (cron)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # 5分ごと（UTC基準）
+  workflow_dispatch:        # 手動実行もできるようにしておく
+
+jobs:
+  push-history:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Push history from snapshot
+        env:
+          SNAPSHOT_URL: https://cryptofeescope.vercel.app/api/snapshot
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/push-history-from-snapshot.mjs
