@@ -299,7 +299,7 @@ function renderHistoryChart () {
   const history = STATE.history;
   const chainId = STATE.historyChain;
 
-  const width  = canvas.clientWidth  || canvas.parentElement.clientWidth  || 640;
+  const width  = canvas.clientWidth  || (canvas.parentElement && canvas.parentElement.clientWidth) || 640;
   const height = canvas.clientHeight || 260;
   canvas.width  = width;
   canvas.height = height;
@@ -313,15 +313,18 @@ function renderHistoryChart () {
     return;
   }
 
+  const fiatCfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
+
   // ts 昇順で並べる
   const rows = history
     .slice()
     .sort((a, b) => (a.ts || 0) - (b.ts || 0))
     .map(entry => {
       const snap = entry[chainId];
-      const fee  = snap ? Number(snap.feeUSD) || 0 : 0;
+      const feeUsd = snap ? Number(snap.feeUSD) || 0 : 0;
+      const feeFiat = feeUsd * fiatCfg.rate;       // ★ フィアット換算
       const ts   = entry.ts || Date.now();
-      return { ts, v: fee };
+      return { ts, v: feeFiat };
     });
 
   if (!rows.length) {
@@ -540,8 +543,8 @@ function setupEventHandlers () {
     TBL.fiatSel.addEventListener('change', e => {
       const val = e.target.value || 'USD';
       STATE.fiat = FIAT_CONFIG[val] ? val : 'USD';
-      applyFilter(); // 再描画
-      renderHistoryChart(); // 履歴グラフも通貨換算は同じ扱い
+      applyFilter();       // 再描画
+      renderHistoryChart(); // 履歴グラフも更新
     });
   }
 
