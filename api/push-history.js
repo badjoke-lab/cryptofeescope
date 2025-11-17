@@ -1,57 +1,83 @@
-// /api/push-history.js
-//
-// Fetch /api/snapshot → 5チェーン分を Supabase に保存する API
-// Vercel cron から毎分叩く（あなたは cron を有効化するだけ）
-
-import { createClient } from '@supabase/supabase-js';
+// api/push-history.js
+// 最新スナップショットを取得して Supabase の history テーブルに 1 行 INSERT する
 
 export default async function handler(req, res) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    console.error("Supabase env missing");
+    res.status(500).json({ error: "supabase_env_missing" });
+    return;
+  }
+
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY // ← ここは "SERVICE ROLE" を使う
+    // 1. まず現在のスナップショットを API 経由で取得
+    const snapshotResp = await fetch(
+      `${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : ""}/api/snapshot`
     );
 
-    const host = req.headers.host;
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const baseUrl = `${proto}://${host}`;
-
-    const snapRes = await fetch(`${baseUrl}/api/snapshot`);
-    if (!snapRes.ok) {
-      throw new Error(`snapshot fetch failed: ${snapRes.status}`);
-    }
-    const snap = await snapRes.json();
-
-    // サマリ形式に Flatten
-    const rows = Object.keys(snap)
-      .filter((key) => key !== "updated")
-      .map((chain) => {
-        const s = snap[chain];
-        return {
-          ts: new Date(snap.updated),
-          chain,
-          fee_usd: s.feeUSD ?? null,
-          speed_sec: s.speedSec ?? null,
-          status: s.status ?? null,
-          raw_json: s,
-        };
+    if (!snapshotResp.ok) {
+      const text = await snapshotResp.text();
+      console.error("snapshot fetch failed", snapshotResp.status, text);
+      res.status(500).json({
+        error: "snapshot_failed",
+        status: snapshotResp.status,
+        body: text,
       });
-
-    const { error } = await supabase.from("history").insert(rows);
-    if (error) {
-      throw error;
+      return;
     }
 
-    return res.status(200).json({
-      ok: true,
-      inserted: rows.length,
-      ts: snap.updated,
+    const snapshot = await snapshotResp.json();
+    // snapshot は { bitcoin: {...}, ethereum: {...}, ... } の形式を想定
+
+    const nowIso = new Date().toISOString();
+
+    // 2. 各チェーンごとに 1 行ずつ history に INSERT
+    const rows = [];
+    for (const [chain, data] of Object.entries(snapshot)) {
+      rows.push({
+        ts: nowIso,
+        chain,
+        fee_usd: data.feeUSD ?? null,
+        speed_sec: data.speedSec ?? null,
+        status: data.status ?? null,
+        // raw 列を作っていないならコメントアウトのままでOK
+        // raw: data,
+      });
+    }
+
+    const url = new URL(`${supabaseUrl}/rest/v1/history`);
+    url.searchParams.set("select", "ts");
+
+    const insertResp = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(rows),
     });
+
+    if (!insertResp.ok) {
+      const text = await insertResp.text();
+      console.error("Supabase insert failed", insertResp.status, text);
+      res.status(500).json({
+        error: "supabase_insert_failed",
+        status: insertResp.status,
+        body: text,
+      });
+      return;
+    }
+
+    res.status(200).json({ ok: true, inserted: rows.length });
   } catch (err) {
-    console.error("push-history failed", err);
-    return res.status(500).json({
-      ok: false,
-      error: String(err?.message || err)
+    console.error("push-history error", err);
+    res.status(500).json({
+      error: "push_history_failed",
+      message: String(err && err.message ? err.message : err),
     });
   }
 }
