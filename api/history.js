@@ -1,10 +1,11 @@
 // api/history.js
-// Supabase の history テーブルから直近の履歴を読み出し、
-// これまでの /api/history と同じ「配列 + チェーンごとのオブジェクト」に整形して返す。
+// Supabase の history テーブルから履歴を読み出し、
+// 既存の /api/history と同じような
+// 「[ { ts, bitcoin: {...}, ethereum: {...}, ... } ]」形式に整形して返す。
 
 export default async function handler(req, res) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
     console.error("Supabase env missing");
@@ -12,31 +13,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  // limit クエリのバリデーション（デフォ 2880, 最大 5000）
-  const rawLimit = typeof req.query.limit === "string" ? req.query.limit : "2880";
-  let limit = parseInt(rawLimit, 10);
-  if (!Number.isFinite(limit) || limit <= 0) {
-    limit = 2880;
-  }
-  if (limit > 5000) {
-    limit = 5000;
-  }
-
-  // チェーン絞り込み（例: ?chain=bitcoin）
-  const chainFilter =
-    typeof req.query.chain === "string" && req.query.chain.trim() !== ""
-      ? req.query.chain.trim()
-      : null;
+  // 直近 N 件だけに絞る（例: 最新 2880 行 ≒ 5 分間隔で 1 日分）
+  const limit = Number(req.query.limit || "2880");
+  const chainFilter = req.query.chain || ""; // 例: "bitcoin"
 
   try {
     const url = new URL(`${supabaseUrl}/rest/v1/history`);
 
-    // 取得カラム
-    url.searchParams.set("select", "ts,chain,fee_usd,speed_sec,status,raw");
+    // 取り出すカラム（raw は使わない）
+    url.searchParams.set("select", "ts,chain,fee_usd,speed_sec,status");
 
-    // チェーンで絞り込み（指定があれば）
+    // チェーン指定があればフィルタ
     if (chainFilter) {
-      // PostgREST の eq フィルタ
+      // Supabase の REST フィルタ構文: chain=eq.bitcoin
       url.searchParams.set("chain", `eq.${chainFilter}`);
     }
 
@@ -63,11 +52,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    /** @type {Array<any>} */
     const rows = await resp.json(); // [{ ts, chain, fee_usd, ... }, ...]
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      // 履歴がまだ無い場合は空配列を返す
       res.status(200).json([]);
       return;
     }
@@ -77,31 +64,22 @@ export default async function handler(req, res) {
     const byTs = {};
 
     for (const row of rows) {
-      const tsStr = row.ts;
-      if (!tsStr) continue;
-
-      const tsMillis = Number(new Date(tsStr).getTime());
-      if (!Number.isFinite(tsMillis)) continue;
-
-      if (!byTs[tsStr]) {
-        byTs[tsStr] = { ts: tsMillis };
+      const ts = row.ts;
+      if (!byTs[ts]) {
+        // ts はミリ秒の number にそろえる
+        byTs[ts] = { ts: new Date(ts).getTime() };
       }
 
       const chain = row.chain;
       if (!chain) continue;
 
-      const pointForTs = byTs[tsStr];
-
-      pointForTs[chain] = {
+      byTs[ts][chain] = {
         feeUSD: row.fee_usd != null ? Number(row.fee_usd) : null,
         speedSec: row.speed_sec != null ? Number(row.speed_sec) : null,
         status: row.status || null,
-        // raw が JSONB で入っている場合はそのまま展開
-        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
       };
     }
 
-    // ts 昇順にソートして配列に
     const points = Object.values(byTs).sort(
       (a, b) => /** @type any */ (a).ts - /** @type any */ (b).ts
     );
