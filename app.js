@@ -1,225 +1,567 @@
-// CryptoFeeScope front-end
-// - /api/snapshot から最新スナップショットを取得
-// - 取得に失敗してもアプリ全体が落ちないように防御的に実装
+// ========== CryptoFeeScope — Phase2+3 (snapshot + tooltip + history) ==========
 
-const CHAIN_META = [
-  { id: "bitcoin",  name: "Bitcoin (L1)",  ticker: "BTC" },
-  { id: "ethereum", name: "Ethereum (L1)", ticker: "ETH" },
-  { id: "arbitrum", name: "Arbitrum One",  ticker: "ARB" },
-  { id: "optimism", name: "Optimism",      ticker: "OP" },
-  { id: "solana",   name: "Solana",        ticker: "SOL" },
-];
+// ----- Theme -----
+(function initTheme () {
+  const prefersDark =
+    window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const saved = localStorage.getItem('theme');
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
 
-const SNAPSHOT_ENDPOINT = "/api/snapshot";
-
-// DOM ヘルパー（IDがなくても動くようにかなり甘めに取る）
-function pickTableBody() {
-  // id="fee-table-body" があれば最優先
-  let el = document.getElementById("fee-table-body");
-  if (el) return el;
-  // data-role="fee-table-body"
-  el = document.querySelector("tbody[data-role='fee-table-body']");
-  if (el) return el;
-  // 最後の手段：ページ内で最初に見つかった tbody
-  return document.querySelector("tbody");
-}
-
-function pickRefreshButton() {
-  return (
-    document.querySelector("[data-role='refresh-button']") ||
-    document.getElementById("refreshButton") ||
-    document.querySelector("button#refresh") ||
-    document.querySelector("button.refresh-button") ||
-    null
-  );
-}
-
-function pickUpdatedLabel() {
-  return (
-    document.querySelector("[data-role='updated-label']") ||
-    document.getElementById("updatedLabel") ||
-    document.getElementById("updatedAt") ||
-    null
-  );
-}
-
-// 表示用フォーマッタ
-function formatFeeUSD(value) {
-  if (value == null || isNaN(value)) return "-";
-  const v = Number(value);
-  if (v <= 0) return "-";
-
-  if (v < 0.000001) return "< $0.000001";
-  if (v < 0.0001)   return "$" + v.toFixed(6);
-  if (v < 0.01)     return "$" + v.toFixed(4);
-  if (v < 1)        return "$" + v.toFixed(3);
-  if (v < 100)      return "$" + v.toFixed(2);
-  return "$" + v.toFixed(0);
-}
-
-function formatSpeedSec(seconds) {
-  if (seconds == null || isNaN(seconds)) return "-";
-  const s = Number(seconds);
-  if (s < 1) return s.toFixed(1) + " sec";
-  if (s < 60) return Math.round(s) + " sec";
-  const m = Math.round(s / 60);
-  return m + " min";
-}
-
-function formatStatus(status) {
-  if (!status) return "-";
-  // snapshot の status は "fast" / "avg" / "slow" を想定
-  const s = String(status).toLowerCase();
-  if (s === "fast") return "Fast";
-  if (s === "avg" || s === "average") return "Average";
-  if (s === "slow") return "Slow";
-  return status;
-}
-
-function formatUpdated(ts) {
-  if (!ts) return "-";
-  // snapshot の updated は UNIX ms かもしれないので両対応
-  let date;
-  if (typeof ts === "number") {
-    date = new Date(ts);
-  } else if (typeof ts === "string") {
-    const n = Number(ts);
-    if (!isNaN(n) && ts.length > 10) {
-      date = new Date(n);
-    } else {
-      date = new Date(ts);
-    }
-  } else {
-    return "-";
-  }
-  if (isNaN(date.getTime())) return "-";
-  return date.toLocaleTimeString();
-}
-
-// snapshot JSON をテーブル用の行配列に変換
-function normalizeSnapshot(snapshotJson) {
-  if (!snapshotJson || typeof snapshotJson !== "object") return [];
-
-  const rows = [];
-
-  for (const meta of CHAIN_META) {
-    const raw = snapshotJson[meta.id];
-    if (!raw) continue;
-
-    rows.push({
-      id: meta.id,
-      name: meta.name,
-      ticker: meta.ticker,
-      feeUSD: raw.feeUSD,
-      speedSec: raw.speedSec,
-      status: raw.status,
-      updated: raw.updated,
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const now =
+        document.documentElement.getAttribute('data-theme') === 'dark'
+          ? 'light'
+          : 'dark';
+      document.documentElement.setAttribute('data-theme', now);
+      localStorage.setItem('theme', now);
     });
   }
+})();
 
-  // 何も取れなかった場合、全部舐める（想定外のチェーンID用）
-  if (rows.length === 0) {
-    for (const [id, raw] of Object.entries(snapshotJson)) {
-      rows.push({
-        id,
-        name: id,
-        ticker: (CHAIN_META.find((c) => c.id === id) || {}).ticker || id.toUpperCase().slice(0, 4),
-        feeUSD: raw.feeUSD,
-        speedSec: raw.speedSec,
-        status: raw.status,
-        updated: raw.updated,
-      });
-    }
+// ----- 定数 -----
+
+const CHAINS = [
+  { id: 'bitcoin',  chain: 'Bitcoin (L1)',         ticker: 'BTC' },
+  { id: 'ethereum', chain: 'Ethereum (L1)',        ticker: 'ETH' },
+  { id: 'arbitrum', chain: 'Arbitrum (L2 on ETH)', ticker: 'ARB' },
+  { id: 'optimism', chain: 'Optimism (L2 on ETH)', ticker: 'OP'  },
+  { id: 'solana',   chain: 'Solana',               ticker: 'SOL' },
+];
+
+// feeFormat.js と同じ概念。label/rate だけ渡す。
+const FIAT_CONFIG = {
+  USD: { label: 'USD', symbol: '$', rate: 1 },
+  JPY: { label: 'JPY', symbol: '¥', rate: 150 }, // ダミーレート
+};
+
+// ----- 状態 -----
+
+const STATE = {
+  rows: [],                // テーブル表示用の行（最新スナップショット）
+  lastError: null,
+  timer: null,
+  intervalMs: 60_000,      // 60s ごとに自動更新
+  fiat: 'USD',             // 選択中フィアット
+  snapshot: null,          // /api/snapshot の生データ（tier 表示に使う）
+  history: [],             // /api/history の配列
+  historyChain: 'bitcoin', // プレビュー対象チェーン
+};
+
+// ----- DOM -----
+
+const TBL = {
+  tbody:           document.getElementById('tbody'),
+  statusPill:      document.getElementById('status'),
+  refreshBtn:      document.getElementById('refreshBtn'),
+  searchInput:     document.getElementById('q'),
+  prioritySel:     document.getElementById('priority'),
+  fiatSel:         document.getElementById('fiat'),
+  feeHeader:       document.getElementById('feeHeader'),
+  historyCanvas:   document.getElementById('historyCanvas'),
+  historyChainSel: document.getElementById('historyChain'),
+};
+
+const ERR_BANNER_ID = 'err-banner';
+
+// ----- ユーティリティ -----
+
+// feeFormat.js に formatFeeDisplay / buildFeeTooltipInfo があればそれを使う。
+// なければフォールバックで自前表示。
+function fmtFiatFromUsd (usd, fiatCode) {
+  const cfg = FIAT_CONFIG[fiatCode] || FIAT_CONFIG.USD;
+  const v = Number(usd) || 0;
+
+  if (typeof formatFeeDisplay === 'function') {
+    return formatFeeDisplay(v, cfg.label, cfg.rate);
   }
+
+  const converted = v * cfg.rate;
+  if (converted === 0) return cfg.symbol + '0';
+  if (converted < 0.001) return cfg.symbol + converted.toFixed(4);
+  if (converted < 1) return cfg.symbol + converted.toFixed(3);
+  return cfg.symbol + converted.toFixed(2);
+}
+
+function fmtSpeed (sec) {
+  if (sec == null || !isFinite(sec)) return '—';
+  const s = Math.max(0, Number(sec) || 0);
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)} s`;
+  const min = s / 60;
+  return `${min.toFixed(1)} min`;
+}
+
+// USDベースの簡易ステータス
+function decideStatus (feeUsd, speedSec) {
+  const fee = Number(feeUsd) || 0;
+  const s   = Number(speedSec) || 0;
+  if (fee < 0.05 && s < 5) return 'fast';
+  if (fee > 0.5 || s > 15) return 'slow';
+  return 'avg';
+}
+
+function nowTime () {
+  const d  = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+function setStatus (text) {
+  if (TBL.statusPill) TBL.statusPill.textContent = text;
+}
+
+function showErrorBanner (msg) {
+  if (!TBL.tbody) return;
+  if (document.getElementById(ERR_BANNER_ID)) return;
+
+  const card = TBL.tbody.closest('.card') || TBL.tbody.closest('article');
+  if (!card) return;
+
+  const banner = document.createElement('div');
+  banner.id = ERR_BANNER_ID;
+  banner.style.cssText =
+    'background:rgba(239,68,68,.10);color:#b00;' +
+    'border:1px solid rgba(239,68,68,.35);border-radius:10px;' +
+    'padding:8px 12px;margin:0 14px 10px;';
+  banner.textContent = msg || 'Failed to fetch data. Retrying in 30s…';
+
+  const inner = card.querySelector('.inner') || card;
+  inner.prepend(banner);
+
+  setTimeout(() => {
+    banner.remove();
+  }, 5000);
+}
+
+// ----- /api/snapshot → rows 変換 -----
+
+async function fetchAll () {
+  const res = await fetch('/api/snapshot');
+  if (!res.ok) {
+    throw new Error('Failed to fetch /api/snapshot');
+  }
+  const snapshot = await res.json();
+  STATE.snapshot = snapshot;
+
+  const rows = CHAINS.map(meta => {
+    const snap = snapshot[meta.id];
+    if (!snap) {
+      return {
+        id: meta.id,
+        chain: meta.chain,
+        ticker: meta.ticker,
+        feeUSD: null,
+        speedSec: null,
+        status: 'avg',
+        updated: '—',
+      };
+    }
+
+    const feeUSD   = Number(snap.feeUSD)   || 0;
+    const speedSec = Number(snap.speedSec) || 0;
+    const status   = snap.status || decideStatus(feeUSD, speedSec);
+
+    let updatedLabel = '—';
+    if (snap.updated) {
+      const d = new Date(snap.updated);
+      if (!isNaN(d.getTime())) {
+        updatedLabel = d.toLocaleTimeString();
+      }
+    }
+
+    return {
+      id: meta.id,
+      chain: meta.chain,
+      ticker: meta.ticker,
+      feeUSD,
+      speedSec,
+      status,
+      updated: updatedLabel,
+    };
+  });
 
   return rows;
 }
 
-// テーブル描画
-function renderTable(rows) {
-  const tbody = pickTableBody();
-  if (!tbody) {
-    console.warn("[CryptoFeeScope] tbody が見つからないため、テーブルを描画できません。");
-    return;
+// ----- テーブル描画 -----
+
+function renderTag (status) {
+  const map  = { fast: 'good', avg: 'warn', slow: 'bad' };
+  const cls  = map[status] || 'warn';
+  const text = status === 'fast' ? 'Fast' : status === 'slow' ? 'Slow' : 'Avg';
+  return `<span class="tag ${cls}">${text}</span>`;
+}
+
+function render (rows) {
+  if (!TBL.tbody) return;
+
+  // ヘッダの通貨表示
+  if (TBL.feeHeader) {
+    const cfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
+    TBL.feeHeader.textContent = `Fee (${cfg.label})`;
   }
 
-  if (!rows || rows.length === 0) {
-    tbody.innerHTML = `
+  if (!rows || !rows.length) {
+    TBL.tbody.innerHTML = `
       <tr>
-        <td colspan="6" style="padding: 24px; text-align: center; color: #888;">
-          No data. Try "Refresh".
+        <td colspan="6" class="mono" style="color:var(--muted)">
+          No chains matched your search.
         </td>
-      </tr>
-    `;
+      </tr>`;
     return;
   }
 
-  const html = rows
-    .map((row) => {
+  const cur = STATE.fiat;
+
+  TBL.tbody.innerHTML = rows
+    .map(r => {
+      const feeCell =
+        r.feeUSD == null
+          ? '<span class="mono">—</span>'
+          : `<span
+               class="fee-btn mono"
+               data-fee-usd="${r.feeUSD}"
+               data-chain-id="${r.id || ''}"
+               style="cursor:pointer;"
+             >${fmtFiatFromUsd(r.feeUSD, cur)}</span>`;
+
       return `
-        <tr>
-          <td>${row.name}</td>
-          <td>${row.ticker}</td>
-          <td>${formatFeeUSD(row.feeUSD)}</td>
-          <td>${formatSpeedSec(row.speedSec)}</td>
-          <td>${formatStatus(row.status)}</td>
-          <td>${formatUpdated(row.updated)}</td>
+        <tr class="rowglow" data-chain-id="${r.id || ''}">
+          <td>${r.chain}</td>
+          <td class="mono">${r.ticker}</td>
+          <td class="fee">${feeCell}</td>
+          <td class="mono">${r.speedSec == null ? '—' : fmtSpeed(r.speedSec)}</td>
+          <td>${renderTag(r.status)}</td>
+          <td class="updated">${r.updated || '—'}</td>
         </tr>
       `;
     })
-    .join("");
-
-  tbody.innerHTML = html;
+    .join('');
 }
 
-// Snapshot 取得 → テーブル更新
-async function loadSnapshotAndRender() {
-  const updatedLabel = pickUpdatedLabel();
-  if (updatedLabel) {
-    updatedLabel.textContent = "Loading…";
+function glowRows () {
+  if (!TBL.tbody) return;
+  Array.prototype.forEach.call(
+    TBL.tbody.querySelectorAll('tr'),
+    tr => {
+      tr.classList.remove('on');
+      void tr.offsetWidth; // reflow
+      tr.classList.add('on');
+      setTimeout(() => tr.classList.remove('on'), 600);
+    }
+  );
+}
+
+// ----- 検索フィルタ -----
+
+function applyFilter () {
+  const q = (TBL.searchInput && TBL.searchInput.value || '').trim().toLowerCase();
+  let rows = STATE.rows.slice();
+
+  if (q) {
+    rows = rows.filter(r => {
+      return (
+        (r.chain   && r.chain.toLowerCase().includes(q)) ||
+        (r.ticker  && r.ticker.toLowerCase().includes(q))
+      );
+    });
   }
 
+  render(rows);
+}
+
+// ----- 履歴取得 & 描画 -----
+
+async function fetchHistory () {
   try {
-    const res = await fetch(SNAPSHOT_ENDPOINT, {
-      method: "GET",
-      headers: { "Accept": "application/json" },
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    const res = await fetch('/api/history');
+    if (!res.ok) throw new Error('Failed to fetch /api/history');
     const json = await res.json();
-    const rows = normalizeSnapshot(json);
-    renderTable(rows);
-
-    if (updatedLabel) {
-      const now = new Date();
-      updatedLabel.textContent = `Updated: ${now.toLocaleTimeString()}`;
-    }
-
-    console.log("[CryptoFeeScope] snapshot loaded", json);
+    // 期待フォーマット: [{ ts, bitcoin:{feeUSD...}, ethereum:{...} , ... }, ...]
+    if (!Array.isArray(json)) return;
+    STATE.history = json;
+    renderHistoryChart();
   } catch (err) {
-    console.error("[CryptoFeeScope] Failed to load snapshot", err);
-    renderTable([]);
-
-    if (updatedLabel) {
-      updatedLabel.textContent = "Error loading data";
-    }
+    console.error(err);
   }
 }
 
-// 初期化
-document.addEventListener("DOMContentLoaded", () => {
-  // 初回ロード
-  loadSnapshotAndRender();
+function renderHistoryChart () {
+  const canvas = TBL.historyCanvas;
+  if (!canvas || !canvas.getContext) return;
 
-  // Refresh ボタンがあれば紐付け
-  const btn = pickRefreshButton();
-  if (btn) {
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      loadSnapshotAndRender();
+  const ctx = canvas.getContext('2d');
+  const history = STATE.history;
+  const chainId = STATE.historyChain;
+
+  const width  = canvas.clientWidth  || canvas.parentElement.clientWidth  || 640;
+  const height = canvas.clientHeight || 260;
+  canvas.width  = width;
+  canvas.height = height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  if (!Array.isArray(history) || !history.length) {
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.fillText('No history yet. Refresh a few times.', 12, 24);
+    return;
+  }
+
+  // ts 昇順で並べる
+  const rows = history
+    .slice()
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+    .map(entry => {
+      const snap = entry[chainId];
+      const fee  = snap ? Number(snap.feeUSD) || 0 : 0;
+      const ts   = entry.ts || Date.now();
+      return { ts, v: fee };
+    });
+
+  if (!rows.length) {
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.fillText('No data for this chain.', 12, 24);
+    return;
+  }
+
+  let min = rows.reduce((m, r) => Math.min(m, r.v), rows[0].v);
+  let max = rows.reduce((m, r) => Math.max(m, r.v), rows[0].v);
+  if (min === max) {
+    const delta = min === 0 ? 1 : Math.abs(min) * 0.2;
+    min -= delta;
+    max += delta;
+  }
+
+  const paddingX = 8;
+  const paddingY = 8;
+  const innerW = Math.max(1, width  - paddingX * 2);
+  const innerH = Math.max(1, height - paddingY * 2);
+
+  // グリッドの薄いライン（Y 中央）
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(paddingX, paddingY + innerH / 2);
+  ctx.lineTo(paddingX + innerW, paddingY + innerH / 2);
+  ctx.stroke();
+
+  // 実線
+  const n = rows.length;
+  const dx = n > 1 ? innerW / (n - 1) : 0;
+
+  ctx.beginPath();
+  rows.forEach((row, i) => {
+    const x = paddingX + dx * i;
+    const yRatio = (row.v - min) / (max - min || 1);
+    const y = paddingY + innerH - innerH * yRatio;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#111827';
+  ctx.stroke();
+}
+
+// ----- fee ツールチップ -----
+
+function closeAllTooltips () {
+  document.querySelectorAll('.fee-tooltip').forEach(el => el.remove());
+  document.removeEventListener('click', handleTooltipOutsideClick);
+}
+
+function handleTooltipOutsideClick (e) {
+  const tooltip = e.target.closest('.fee-tooltip');
+  const btn = e.target.closest('.fee-btn');
+  if (!tooltip && !btn) {
+    closeAllTooltips();
+  }
+}
+
+function buildTierHtmlForChain (chainId) {
+  const snapshot = STATE.snapshot;
+  if (!snapshot || !snapshot[chainId] || !snapshot[chainId].tieredSpeed) return '';
+
+  const snap = snapshot[chainId];
+  if (!Array.isArray(snap.tiers) || !snap.tiers.length) return '';
+
+  const lines = snap.tiers.map(tier => {
+    const price = tier.gasPrice;
+    const unit  = tier.gasUnit || 'gwei';
+    const fee   = tier.feeUSD;
+    const minS  = tier.speedMinSec;
+    const maxS  = tier.speedMaxSec;
+    const label = tier.tier || '';
+
+    const feeLabel =
+      fee != null ? fmtFiatFromUsd(fee, STATE.fiat) : '—';
+    const speedLabel =
+      minS != null && maxS != null
+        ? `${minS.toFixed(0)}–${maxS.toFixed(0)} s`
+        : '—';
+
+    return `
+      <div class="cfs-tier-row mono">
+        <span class="cfs-tier-name">${label}</span>
+        <span class="cfs-tier-gas">${price} ${unit}</span>
+        <span class="cfs-tier-fee">${feeLabel}</span>
+        <span class="cfs-tier-speed">${speedLabel}</span>
+      </div>
+    `;
+  });
+
+  return `
+    <div class="cfs-tooltip-title" style="font-weight:600;margin-top:4px;margin-bottom:2px;">Gas tiers</div>
+    <div class="cfs-tier-table">
+      ${lines.join('')}
+    </div>
+  `;
+}
+
+function setupFeeTooltipHandler () {
+  if (!TBL.tbody) return;
+
+  TBL.tbody.addEventListener('click', e => {
+    const btn = e.target.closest('.fee-btn');
+    if (!btn) {
+      // セル以外クリックで閉じる
+      closeAllTooltips();
+      return;
+    }
+
+    e.stopPropagation();
+    closeAllTooltips();
+
+    const feeUsd  = parseFloat(btn.getAttribute('data-fee-usd') || '0');
+    const chainId = btn.getAttribute('data-chain-id') || '';
+    const cfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
+
+    let tooltipInfo = null;
+    if (typeof buildFeeTooltipInfo === 'function') {
+      // ゼロカウント関連はもう使わない。exact だけ利用。
+      tooltipInfo = buildFeeTooltipInfo(feeUsd, cfg.label, cfg.rate);
+    } else {
+      const exact = fmtFiatFromUsd(feeUsd, STATE.fiat) + ' ' + cfg.label;
+      tooltipInfo = { exactLabel: exact };
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'fee-tooltip';
+    tooltip.style.position = 'absolute';
+    tooltip.style.zIndex = '9999';
+
+    // ★ ポップアップは常にライトグレー固定
+    tooltip.style.background   = '#f3f4f6';
+    tooltip.style.color        = '#111827';
+    tooltip.style.border       = '1px solid #d1d5db';
+    tooltip.style.borderRadius = '8px';
+    tooltip.style.padding      = '8px 10px';
+    tooltip.style.fontSize     = '12px';
+    tooltip.style.boxShadow    = '0 8px 24px rgba(15,23,42,.12)';
+    tooltip.style.maxWidth     = '260px';
+
+    const exactHtml = `
+      <div class="cfs-tooltip-title" style="font-weight:600;margin-bottom:2px;">Exact fee</div>
+      <div class="cfs-tooltip-line mono" style="margin-bottom:4px;">${tooltipInfo.exactLabel}</div>
+    `;
+
+    // ★ Zero-count view は完全削除
+    const tierHtml = buildTierHtmlForChain(chainId);
+
+    tooltip.innerHTML = exactHtml + tierHtml;
+    document.body.appendChild(tooltip);
+
+    const rect = btn.getBoundingClientRect();
+    const top  = window.scrollY + rect.bottom + 6;
+    const left = window.scrollX + rect.left + rect.width / 2;
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.transform = 'translateX(-50%)';
+
+    document.addEventListener('click', handleTooltipOutsideClick);
+  });
+}
+
+// ----- リフレッシュ -----
+
+async function refreshOnce ({ showGlow = true } = {}) {
+  try {
+    if (TBL.refreshBtn) TBL.refreshBtn.disabled = true;
+
+    const rows = await fetchAll();
+    STATE.rows = rows;
+    applyFilter();
+
+    // 履歴も更新（グラフ用）
+    fetchHistory().catch(() => {});
+
+    setStatus('Updated ' + nowTime());
+    if (showGlow) glowRows();
+  } catch (err) {
+    console.error(err);
+    STATE.lastError = err;
+    showErrorBanner('Failed to fetch data. Retrying in 30s…');
+    setStatus('Update failed ' + nowTime());
+    setTimeout(() => refreshOnce({ showGlow: false }), 30_000);
+  } finally {
+    if (TBL.refreshBtn) TBL.refreshBtn.disabled = false;
+  }
+}
+
+// ----- イベント束ね -----
+
+function setupEventHandlers () {
+  if (TBL.refreshBtn) {
+    TBL.refreshBtn.addEventListener('click', () =>
+      refreshOnce({ showGlow: true })
+    );
+  }
+
+  if (TBL.searchInput) {
+    let t = null;
+    TBL.searchInput.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(applyFilter, 180); // debounce
     });
   }
-});
+
+  if (TBL.prioritySel) {
+    // まだダミー
+    TBL.prioritySel.addEventListener('change', () => {});
+  }
+
+  if (TBL.fiatSel) {
+    TBL.fiatSel.addEventListener('change', e => {
+      const val = e.target.value || 'USD';
+      STATE.fiat = FIAT_CONFIG[val] ? val : 'USD';
+      applyFilter(); // 再描画
+      renderHistoryChart(); // 履歴グラフも通貨換算は同じ扱い
+    });
+  }
+
+  if (TBL.historyChainSel) {
+    TBL.historyChainSel.addEventListener('change', e => {
+      const val = e.target.value || 'bitcoin';
+      STATE.historyChain = val;
+      renderHistoryChart();
+    });
+  }
+
+  setupFeeTooltipHandler();
+}
+
+// ----- Boot -----
+
+(function boot () {
+  setStatus('Updated —');
+  setupEventHandlers();
+  refreshOnce({ showGlow: false });
+  clearInterval(STATE.timer);
+  STATE.timer = setInterval(() => refreshOnce({ showGlow: true }), STATE.intervalMs);
+})();
