@@ -47,7 +47,7 @@ const STATE = {
   intervalMs: 60_000,      // 60s ごとに自動更新
   fiat: 'USD',             // 選択中フィアット
   snapshot: null,          // /api/snapshot の生データ（tier 表示に使う）
-  history: [],             // /api/history の配列
+  history: [],             // /api/history の配列（生データ）
   historyChain: 'bitcoin', // プレビュー対象チェーン
 };
 
@@ -279,7 +279,8 @@ function applyFilter () {
 
 async function fetchHistory () {
   try {
-    const res = await fetch('/api/history');
+    // 直近 100 件だけ取得
+    const res = await fetch('/api/history?limit=100');
     if (!res.ok) throw new Error('Failed to fetch /api/history');
     const json = await res.json();
     // 期待フォーマット: [{ ts, bitcoin:{feeUSD...}, ethereum:{...} , ... }, ...]
@@ -299,7 +300,10 @@ function renderHistoryChart () {
   const history = STATE.history;
   const chainId = STATE.historyChain;
 
-  const width  = canvas.clientWidth  || (canvas.parentElement && canvas.parentElement.clientWidth) || 640;
+  const width  =
+    canvas.clientWidth ||
+    (canvas.parentElement && canvas.parentElement.clientWidth) ||
+    640;
   const height = canvas.clientHeight || 260;
   canvas.width  = width;
   canvas.height = height;
@@ -315,17 +319,20 @@ function renderHistoryChart () {
 
   const fiatCfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
 
-  // ts 昇順で並べる
-  const rows = history
+  // ts 昇順で並べる & 直近 maxPoints 件に絞る
+  const sorted = history
     .slice()
-    .sort((a, b) => (a.ts || 0) - (b.ts || 0))
-    .map(entry => {
-      const snap = entry[chainId];
-      const feeUsd = snap ? Number(snap.feeUSD) || 0 : 0;
-      const feeFiat = feeUsd * fiatCfg.rate;       // ★ フィアット換算
-      const ts   = entry.ts || Date.now();
-      return { ts, v: feeFiat };
-    });
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const maxPoints = 100;
+  const sliced = sorted.slice(Math.max(0, sorted.length - maxPoints));
+
+  const rows = sliced.map(entry => {
+    const snap = entry[chainId];
+    const feeUsd = snap ? Number(snap.feeUSD) || 0 : 0;
+    const feeFiat = feeUsd * fiatCfg.rate;  // フィアット換算
+    const ts   = entry.ts || Date.now();
+    return { ts, v: feeFiat };
+  });
 
   if (!rows.length) {
     ctx.fillStyle = '#9ca3af';
@@ -333,6 +340,10 @@ function renderHistoryChart () {
     ctx.fillText('No data for this chain.', 12, 24);
     return;
   }
+
+  // すべてほぼ同じ値かどうか
+  const base = rows[0].v;
+  const isFlat = rows.every(r => Math.abs(r.v - base) < 1e-9);
 
   let min = rows.reduce((m, r) => Math.min(m, r.v), rows[0].v);
   let max = rows.reduce((m, r) => Math.max(m, r.v), rows[0].v);
@@ -346,6 +357,13 @@ function renderHistoryChart () {
   const paddingY = 8;
   const innerW = Math.max(1, width  - paddingX * 2);
   const innerH = Math.max(1, height - paddingY * 2);
+
+  // 背景メッセージ（フラットな場合の注意書き）
+  if (isFlat) {
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '11px system-ui, -apple-system, sans-serif';
+    ctx.fillText('Note: fees are almost flat in this range.', 12, 20);
+  }
 
   // グリッドの薄いライン（Y 中央）
   ctx.strokeStyle = '#e5e7eb';
@@ -543,7 +561,7 @@ function setupEventHandlers () {
     TBL.fiatSel.addEventListener('change', e => {
       const val = e.target.value || 'USD';
       STATE.fiat = FIAT_CONFIG[val] ? val : 'USD';
-      applyFilter();       // 再描画
+      applyFilter();        // 再描画
       renderHistoryChart(); // 履歴グラフも更新
     });
   }
@@ -566,5 +584,8 @@ function setupEventHandlers () {
   setupEventHandlers();
   refreshOnce({ showGlow: false });
   clearInterval(STATE.timer);
-  STATE.timer = setInterval(() => refreshOnce({ showGlow: true }), STATE.intervalMs);
+  STATE.timer = setInterval(
+    () => refreshOnce({ showGlow: true }),
+    STATE.intervalMs
+  );
 })();

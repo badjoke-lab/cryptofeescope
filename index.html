@@ -1,11 +1,51 @@
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
+<head>
   <meta charset="utf-8" />
   <title>CryptoFeeScope – L1 / L2 fee & latency snapshot</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+    name="description"
+    content="CryptoFeeScope is a lightweight dashboard to compare L1 / L2 transaction fees and confirmation times at a glance."
+  />
+
+  <!-- Favicon -->
+  <link rel="icon" href="assets/favicon.ico" />
+  <!-- （必要なら 32x32 / 192x192 なども後で追加可） -->
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="CryptoFeeScope" />
+  <meta
+    property="og:title"
+    content="CryptoFeeScope – L1 / L2 fee & latency snapshot"
+  />
+  <meta
+    property="og:description"
+    content="Compare network fees & speed across major L1 / L2 chains on a single screen."
+  />
+  <meta property="og:url" content="https://cryptofeescope.vercel.app/" />
+  <meta property="og:image" content="assets/og-cryptofeescope.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta
+    name="twitter:title"
+    content="CryptoFeeScope – L1 / L2 fee & latency snapshot"
+  />
+  <meta
+    name="twitter:description"
+    content="Compare L1 / L2 network fees & speed with a simple dashboard."
+  />
+  <meta name="twitter:image" content="assets/og-cryptofeescope.png" />
+
+  <!-- Theme -->
+  <meta name="theme-color" content="#020617" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header>
     <div class="bar">
@@ -143,5 +183,9 @@
 
   <script src="feeFormat.js"></script>
   <script src="app.js"></script>
+  <!-- Cloudflare Web Analytics -->
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+  <!-- End Cloudflare Web Analytics -->
+
 </body>
 </html>
