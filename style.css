@@ -1,26 +1,26 @@
 /* ========== CryptoFeeScope — Phase1 UI ========== */
 
 :root{
-  --bg:#F9FAFB;          /* base background */
-  --card:#FFFFFF;        /* surfaces */
-  --fg:#111827;          /* primary text */
-  --muted:#6B7280;       /* secondary text */
-  --line:#E5E7EB;        /* borders */
-  --accent:#00C896;      /* brand accent mint (Refresh) */
+  --bg:#F9FAFB;
+  --card:#FFFFFF;
+  --fg:#111827;
+  --muted:#6B7280;
+  --line:#E5E7EB;
+  --accent:#00C896;
   --accent-strong:#00E0A2;
-  --good:#10B981;        /* status fast */
-  --warn:#F59E0B;        /* status avg */
-  --bad:#EF4444;         /* status slow */
+  --good:#10B981;
+  --warn:#F59E0B;
+  --bad:#EF4444;
   --shadow:0 6px 20px rgba(17,24,39,0.06);
-  --glow:0 0 0px rgba(0,200,150,0); /* animated */
+  --glow:0 0 0px rgba(0,200,150,0);
   --btn-text-strong:#ffffff;
 }
 
 [data-theme="dark"]{
-  --bg:#0F172A;          /* slate-900 */
-  --card:#1E293B;        /* slate-800 */
-  --fg:#F1F5F9;          /* slate-100 */
-  --muted:#94A3B8;       /* slate-400 */
+  --bg:#0F172A;
+  --card:#1E293B;
+  --fg:#F1F5F9;
+  --muted:#94A3B8;
   --line:#2B3647;
   --accent:#00E0A2;
   --accent-strong:#00FFC0;
@@ -43,7 +43,6 @@ a{
   color:inherit;
 }
 
-/* ヘッダーのボタンリンクだけは下線なし */
 .toolbar a,
 a.btn{
   text-decoration:none;
@@ -225,18 +224,22 @@ tbody tr:hover{
 
 /* Details 列（▾ボタン） */
 .col-details{
-  width:32px;
+  width:40px;
   text-align:center;
 }
 .fee-details-toggle{
   font:inherit;
-  font-size:14px;
+  font-size:20px;          /* ▾ を大きく */
   line-height:1;
-  padding:0;
+  width:24px;
+  height:24px;
   border:none;
   background:transparent;
   cursor:pointer;
-  opacity:0.7;
+  opacity:0.75;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
 .fee-details-toggle:hover{
   opacity:1;
@@ -266,7 +269,7 @@ tbody tr:hover{
   border-color:rgba(239,68,68,.35);
 }
 
-/* Refresh glow（旧 rowglow / 新 row-glow 両対応） */
+/* Refresh glow */
 .rowglow{
   box-shadow: var(--glow);
   transition: box-shadow .6s ease;
@@ -278,7 +281,7 @@ tbody tr:hover{
   box-shadow: 0 0 0 4px rgba(0,224,162,.25);
 }
 
-/* 新JS用クラス（cfs-row / row-glow） */
+/* 新JS用クラス */
 .cfs-row.row-glow{
   box-shadow: var(--glow);
   transition: box-shadow .6s ease;
@@ -363,7 +366,7 @@ footer .note{
 
 /* Responsive tweaks */
 @media(max-width:768px){
-  .brand .sub{display:none;}        /* 見出しを詰める */
+  .brand .sub{display:none;}
   .bar{padding-inline:12px;}
   .toolbar{gap:6px;}
 }
@@ -376,7 +379,6 @@ footer .note{
     margin-right:2px;
   }
 
-  /* モバイル時は絵文字のみ表示 → 1段に収める */
   .btn .label{display:none;}
   .btn{padding-inline:8px;}
 
@@ -396,7 +398,7 @@ footer .note{
   justify-content:space-between;
   align-items:center;
   gap:12px;
-  margin-bottom:12px;
+  margin-bottom:8px;
 }
 
 .cfs-history-title{
@@ -422,6 +424,6 @@ footer .note{
 
 #historyCanvas{
   width:100%;
-  min-height:120px;
+  min-height:80px;   /* 120px → 80px に縮める */
   display:block;
 }

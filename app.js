@@ -414,7 +414,7 @@ function renderHistoryChart () {
     canvas.clientWidth ||
     (canvas.parentElement && canvas.parentElement.clientWidth) ||
     640;
-  const height = canvas.clientHeight || 260;
+  const height = canvas.clientHeight || 140;
   canvas.width  = width;
   canvas.height = height;
 
