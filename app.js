@@ -32,23 +32,22 @@ const CHAINS = [
   { id: 'solana',   chain: 'Solana',               ticker: 'SOL' },
 ];
 
-// feeFormat.js と同じ概念。label/rate だけ渡す。
 const FIAT_CONFIG = {
   USD: { label: 'USD', symbol: '$', rate: 1 },
-  JPY: { label: 'JPY', symbol: '¥', rate: 150 }, // ダミーレート
+  JPY: { label: 'JPY', symbol: '¥', rate: 150 },
 };
 
 // ----- 状態 -----
 
 const STATE = {
-  rows: [],                // テーブル表示用の行（最新スナップショット）
+  rows: [],
   lastError: null,
   timer: null,
-  intervalMs: 60_000,      // 60s ごとに自動更新
-  fiat: 'USD',             // 選択中フィアット
-  snapshot: null,          // /api/snapshot の生データ（tier 表示に使う）
-  history: [],             // /api/history の配列（生データ）
-  historyChain: 'bitcoin', // プレビュー対象チェーン
+  intervalMs: 60_000,
+  fiat: 'USD',
+  snapshot: null,
+  history: [],
+  historyChain: 'bitcoin',
 };
 
 // ----- DOM -----
@@ -69,8 +68,6 @@ const ERR_BANNER_ID = 'err-banner';
 
 // ----- ユーティリティ -----
 
-// feeFormat.js に formatFeeDisplay / buildFeeTooltipInfo があればそれを使う。
-// なければフォールバックで自前表示。
 function fmtFiatFromUsd (usd, fiatCode) {
   const cfg = FIAT_CONFIG[fiatCode] || FIAT_CONFIG.USD;
   const v = Number(usd) || 0;
@@ -94,7 +91,6 @@ function fmtSpeed (sec) {
   return `${min.toFixed(1)} min`;
 }
 
-// USDベースの簡易ステータス
 function decideStatus (feeUsd, speedSec) {
   const fee = Number(feeUsd) || 0;
   const s   = Number(speedSec) || 0;
@@ -138,13 +134,11 @@ function showErrorBanner (msg) {
   }, 5000);
 }
 
-// ----- /api/snapshot → rows 変換 -----
+// ----- /api/snapshot -----
 
 async function fetchAll () {
   const res = await fetch('/api/snapshot');
-  if (!res.ok) {
-    throw new Error('Failed to fetch /api/snapshot');
-  }
+  if (!res.ok) throw new Error('Failed to fetch /api/snapshot');
   const snapshot = await res.json();
   STATE.snapshot = snapshot;
 
@@ -169,9 +163,7 @@ async function fetchAll () {
     let updatedLabel = '—';
     if (snap.updated) {
       const d = new Date(snap.updated);
-      if (!isNaN(d.getTime())) {
-        updatedLabel = d.toLocaleTimeString();
-      }
+      if (!isNaN(d.getTime())) updatedLabel = d.toLocaleTimeString();
     }
 
     return {
@@ -187,8 +179,6 @@ async function fetchAll () {
 
   return rows;
 }
-
-// ----- Gas tier 取得ヘルパー -----
 
 function getGasTiersForChain (chainId) {
   const snapshot = STATE.snapshot;
@@ -210,7 +200,6 @@ function renderTag (status) {
 function render (rows) {
   if (!TBL.tbody) return;
 
-  // ヘッダの通貨表示
   if (TBL.feeHeader) {
     const cfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
     TBL.feeHeader.textContent = `Fee (${cfg.label})`;
@@ -241,7 +230,6 @@ function render (rows) {
                style="cursor:pointer;"
              >${fmtFiatFromUsd(r.feeUSD, cur)}</span>`;
 
-      // tier があるチェーンだけ ▾ ボタンを出す
       const snap = snapshot[r.id];
       const hasTiers = !!(snap && Array.isArray(snap.tiers) && snap.tiers.length);
 
@@ -275,14 +263,14 @@ function glowRows () {
     TBL.tbody.querySelectorAll('tr'),
     tr => {
       tr.classList.remove('on');
-      void tr.offsetWidth; // reflow
+      void tr.offsetWidth;
       tr.classList.add('on');
       setTimeout(() => tr.classList.remove('on'), 600);
     }
   );
 }
 
-// ----- Gas tier 展開行の追加 / 削除 -----
+// ----- Gas tier 展開行 -----
 
 function createGasDetailsRow (chainId) {
   const tiers = getGasTiersForChain(chainId);
@@ -305,7 +293,6 @@ function createGasDetailsRow (chainId) {
     wrapper.appendChild(title);
 
     tiers.forEach((tier) => {
-      // 想定: tier = { tier, gasPrice, gasUnit, feeUSD, speedMinSec, speedMaxSec }
       const line = document.createElement('div');
       line.className = 'gas-tier-line';
 
@@ -354,20 +341,18 @@ function toggleGasDetailsRow (baseRow, chainId, toggleBtn) {
 
   const next = baseRow.nextElementSibling;
 
-  // すでに詳細行が付いている場合 → 閉じる
   if (next && next.classList.contains('fee-details-row')) {
     next.remove();
     if (toggleBtn) toggleBtn.textContent = '▾';
     return;
   }
 
-  // 新しく詳細行を追加
   const detailsTr = createGasDetailsRow(chainId);
   tbody.insertBefore(detailsTr, baseRow.nextSibling);
   if (toggleBtn) toggleBtn.textContent = '▴';
 }
 
-// ----- 検索フィルタ -----
+// ----- 検索 -----
 
 function applyFilter () {
   const q = (TBL.searchInput && TBL.searchInput.value || '').trim().toLowerCase();
@@ -385,15 +370,13 @@ function applyFilter () {
   render(rows);
 }
 
-// ----- 履歴取得 & 描画 -----
+// ----- 履歴 -----
 
 async function fetchHistory () {
   try {
-    // 直近 100 件だけ取得
     const res = await fetch('/api/history?limit=100');
     if (!res.ok) throw new Error('Failed to fetch /api/history');
     const json = await res.json();
-    // 期待フォーマット: [{ ts, bitcoin:{feeUSD...}, ethereum:{...} , ... }, ...]
     if (!Array.isArray(json)) return;
     STATE.history = json;
     renderHistoryChart();
@@ -410,11 +393,12 @@ function renderHistoryChart () {
   const history = STATE.history;
   const chainId = STATE.historyChain;
 
-  const width  =
+  const width =
     canvas.clientWidth ||
     (canvas.parentElement && canvas.parentElement.clientWidth) ||
     640;
-  const height = canvas.clientHeight || 140;
+  // ★ 高さは常に 100px に固定してカードを低くする
+  const height = 100;
   canvas.width  = width;
   canvas.height = height;
 
@@ -429,7 +413,6 @@ function renderHistoryChart () {
 
   const fiatCfg = FIAT_CONFIG[STATE.fiat] || FIAT_CONFIG.USD;
 
-  // ts 昇順で並べる & 直近 maxPoints 件に絞る
   const sorted = history
     .slice()
     .sort((a, b) => (a.ts || 0) - (b.ts || 0));
@@ -439,7 +422,7 @@ function renderHistoryChart () {
   const rows = sliced.map(entry => {
     const snap = entry[chainId];
     const feeUsd = snap ? Number(snap.feeUSD) || 0 : 0;
-    const feeFiat = feeUsd * fiatCfg.rate;  // フィアット換算
+    const feeFiat = feeUsd * fiatCfg.rate;
     const ts   = entry.ts || Date.now();
     return { ts, v: feeFiat };
   });
@@ -451,7 +434,6 @@ function renderHistoryChart () {
     return;
   }
 
-  // すべてほぼ同じ値かどうか
   const base = rows[0].v;
   const isFlat = rows.every(r => Math.abs(r.v - base) < 1e-9);
 
@@ -468,14 +450,12 @@ function renderHistoryChart () {
   const innerW = Math.max(1, width  - paddingX * 2);
   const innerH = Math.max(1, height - paddingY * 2);
 
-  // 背景メッセージ（フラットな場合の注意書き）
   if (isFlat) {
     ctx.fillStyle = '#9ca3af';
     ctx.font = '11px system-ui, -apple-system, sans-serif';
     ctx.fillText('Note: fees are almost flat in this range.', 12, 20);
   }
 
-  // グリッドの薄いライン（Y 中央）
   ctx.strokeStyle = '#e5e7eb';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -483,7 +463,6 @@ function renderHistoryChart () {
   ctx.lineTo(paddingX + innerW, paddingY + innerH / 2);
   ctx.stroke();
 
-  // 実線
   const n = rows.length;
   const dx = n > 1 ? innerW / (n - 1) : 0;
 
@@ -500,7 +479,7 @@ function renderHistoryChart () {
   ctx.stroke();
 }
 
-// ----- fee ツールチップ（正確な値のみ）-----
+// ----- fee ツールチップ（正確な値だけ）-----
 
 function closeAllTooltips () {
   document.querySelectorAll('.fee-tooltip').forEach(el => el.remove());
@@ -521,7 +500,6 @@ function setupFeeTooltipHandler () {
   TBL.tbody.addEventListener('click', e => {
     const btn = e.target.closest('.fee-btn');
     if (!btn) {
-      // セル以外クリックで閉じる（Details ボタンなどは別ハンドラ）
       if (!e.target.closest('.fee-details-toggle')) {
         closeAllTooltips();
       }
@@ -537,7 +515,6 @@ function setupFeeTooltipHandler () {
 
     let tooltipInfo = null;
     if (typeof buildFeeTooltipInfo === 'function') {
-      // exact だけ利用。tier / zero-count はここでは表示しない。
       tooltipInfo = buildFeeTooltipInfo(feeUsd, cfg.label, cfg.rate);
     } else {
       const exact = fmtFiatFromUsd(feeUsd, STATE.fiat) + ' ' + cfg.label;
@@ -549,7 +526,6 @@ function setupFeeTooltipHandler () {
     tooltip.style.position = 'absolute';
     tooltip.style.zIndex = '9999';
 
-    // ★ ポップアップは常にライトグレー固定
     tooltip.style.background   = '#f3f4f6';
     tooltip.style.color        = '#111827';
     tooltip.style.border       = '1px solid #d1d5db';
@@ -564,7 +540,6 @@ function setupFeeTooltipHandler () {
       <div class="cfs-tooltip-line mono" style="margin-bottom:4px;">${tooltipInfo.exactLabel}</div>
     `;
 
-    // ★ Gas tier 情報はここでは出さない（Details トグルで見る）
     tooltip.innerHTML = exactHtml;
     document.body.appendChild(tooltip);
 
@@ -609,7 +584,6 @@ async function refreshOnce ({ showGlow = true } = {}) {
     STATE.rows = rows;
     applyFilter();
 
-    // 履歴も更新（グラフ用）
     fetchHistory().catch(() => {});
 
     setStatus('Updated ' + nowTime());
@@ -638,12 +612,11 @@ function setupEventHandlers () {
     let t = null;
     TBL.searchInput.addEventListener('input', () => {
       clearTimeout(t);
-      t = setTimeout(applyFilter, 180); // debounce
+      t = setTimeout(applyFilter, 180);
     });
   }
 
   if (TBL.prioritySel) {
-    // まだダミー
     TBL.prioritySel.addEventListener('change', () => {});
   }
 
@@ -651,8 +624,8 @@ function setupEventHandlers () {
     TBL.fiatSel.addEventListener('change', e => {
       const val = e.target.value || 'USD';
       STATE.fiat = FIAT_CONFIG[val] ? val : 'USD';
-      applyFilter();        // 再描画
-      renderHistoryChart(); // 履歴グラフも更新
+      applyFilter();
+      renderHistoryChart();
     });
   }
 

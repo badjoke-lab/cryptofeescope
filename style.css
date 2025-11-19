@@ -229,20 +229,26 @@ tbody tr:hover{
 }
 .fee-details-toggle{
   font:inherit;
-  font-size:20px;          /* ▾ を大きく */
+  font-size:16px;
   line-height:1;
-  width:24px;
-  height:24px;
-  border:none;
-  background:transparent;
+  width:26px;
+  height:26px;
+  border-radius:6px;              /* 角丸正方形 */
+  border:1px solid var(--line);
+  background:#f3f4f6;
+  color:#374151;
   cursor:pointer;
-  opacity:0.75;
   display:inline-flex;
   align-items:center;
   justify-content:center;
 }
 .fee-details-toggle:hover{
-  opacity:1;
+  background:#e5e7eb;
+}
+[data-theme="dark"] .fee-details-toggle{
+  background:#020617;
+  border-color:#1f2937;
+  color:#e5e7eb;
 }
 
 /* Status tag */
@@ -278,15 +284,6 @@ tbody tr:hover{
   box-shadow: 0 0 0 4px rgba(0,200,150,.25);
 }
 [data-theme="dark"] .rowglow.on{
-  box-shadow: 0 0 0 4px rgba(0,224,162,.25);
-}
-
-/* 新JS用クラス */
-.cfs-row.row-glow{
-  box-shadow: var(--glow);
-  transition: box-shadow .6s ease;
-}
-[data-theme="dark"] .cfs-row.row-glow{
   box-shadow: 0 0 0 4px rgba(0,224,162,.25);
 }
 
@@ -390,7 +387,12 @@ footer .note{
 /* ========== Phase3: history chart ========== */
 
 .cfs-history-card{
-  margin-top:16px;
+  margin-top:12px;
+}
+.cfs-history-card .inner{
+  padding-top:10px;
+  padding-bottom:10px;
+  max-height: 210px;    
 }
 
 .cfs-history-header{
@@ -398,7 +400,7 @@ footer .note{
   justify-content:space-between;
   align-items:center;
   gap:12px;
-  margin-bottom:8px;
+  margin-bottom:6px;
 }
 
 .cfs-history-title{
@@ -424,6 +426,6 @@ footer .note{
 
 #historyCanvas{
   width:100%;
-  min-height:80px;   /* 120px → 80px に縮める */
+  min-height:50px;   /* さらに低く */
   display:block;
 }
