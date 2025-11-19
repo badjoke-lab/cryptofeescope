@@ -1,4 +1,4 @@
-// ========== CryptoFeeScope — Phase2+3 (snapshot + tooltip + history) ==========
+// ========== CryptoFeeScope — Phase2+3 (snapshot + tooltip + history + gas tiers toggle) ==========
 
 // ----- Theme -----
 (function initTheme () {
@@ -188,6 +188,16 @@ async function fetchAll () {
   return rows;
 }
 
+// ----- Gas tier 取得ヘルパー -----
+
+function getGasTiersForChain (chainId) {
+  const snapshot = STATE.snapshot;
+  if (!snapshot) return [];
+  const snap = snapshot[chainId];
+  if (!snap || !Array.isArray(snap.tiers)) return [];
+  return snap.tiers;
+}
+
 // ----- テーブル描画 -----
 
 function renderTag (status) {
@@ -209,7 +219,7 @@ function render (rows) {
   if (!rows || !rows.length) {
     TBL.tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="mono" style="color:var(--muted)">
+        <td colspan="7" class="mono" style="color:var(--muted)">
           No chains matched your search.
         </td>
       </tr>`;
@@ -217,6 +227,7 @@ function render (rows) {
   }
 
   const cur = STATE.fiat;
+  const snapshot = STATE.snapshot || {};
 
   TBL.tbody.innerHTML = rows
     .map(r => {
@@ -230,12 +241,26 @@ function render (rows) {
                style="cursor:pointer;"
              >${fmtFiatFromUsd(r.feeUSD, cur)}</span>`;
 
+      // tier があるチェーンだけ ▾ ボタンを出す
+      const snap = snapshot[r.id];
+      const hasTiers = !!(snap && Array.isArray(snap.tiers) && snap.tiers.length);
+
+      const detailsCell = hasTiers
+        ? `<button
+             type="button"
+             class="fee-details-toggle"
+             data-chain-id="${r.id || ''}"
+             aria-label="Toggle gas tiers"
+           >▾</button>`
+        : '';
+
       return `
         <tr class="rowglow" data-chain-id="${r.id || ''}">
           <td>${r.chain}</td>
           <td class="mono">${r.ticker}</td>
           <td class="fee">${feeCell}</td>
           <td class="mono">${r.speedSec == null ? '—' : fmtSpeed(r.speedSec)}</td>
+          <td class="col-details">${detailsCell}</td>
           <td>${renderTag(r.status)}</td>
           <td class="updated">${r.updated || '—'}</td>
         </tr>
@@ -255,6 +280,91 @@ function glowRows () {
       setTimeout(() => tr.classList.remove('on'), 600);
     }
   );
+}
+
+// ----- Gas tier 展開行の追加 / 削除 -----
+
+function createGasDetailsRow (chainId) {
+  const tiers = getGasTiersForChain(chainId);
+  const tr = document.createElement('tr');
+  tr.className = 'fee-details-row';
+
+  const td = document.createElement('td');
+  td.colSpan = 7;
+  td.className = 'fee-details-cell';
+
+  if (!tiers.length) {
+    td.textContent = 'No gas tier information available for this chain.';
+  } else {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'gas-tiers-wrapper';
+
+    const title = document.createElement('div');
+    title.className = 'gas-tiers-title';
+    title.textContent = 'Gas tiers';
+    wrapper.appendChild(title);
+
+    tiers.forEach((tier) => {
+      // 想定: tier = { tier, gasPrice, gasUnit, feeUSD, speedMinSec, speedMaxSec }
+      const line = document.createElement('div');
+      line.className = 'gas-tier-line';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'gas-tier-label';
+      labelSpan.textContent = tier.tier || '';
+
+      const gasSpan = document.createElement('span');
+      gasSpan.className = 'gas-tier-gas';
+      if (tier.gasPrice != null) {
+        const unit = tier.gasUnit || 'gwei';
+        gasSpan.textContent = `${tier.gasPrice} ${unit}`;
+      }
+
+      const feeSpan = document.createElement('span');
+      feeSpan.className = 'gas-tier-fee';
+      if (tier.feeUSD != null) {
+        feeSpan.textContent = fmtFiatFromUsd(tier.feeUSD, STATE.fiat);
+      }
+
+      const speedSpan = document.createElement('span');
+      speedSpan.className = 'gas-tier-speed';
+      if (tier.speedMinSec != null && tier.speedMaxSec != null) {
+        speedSpan.textContent =
+          `${tier.speedMinSec.toFixed(0)}–${tier.speedMaxSec.toFixed(0)} s`;
+      }
+
+      line.appendChild(labelSpan);
+      if (gasSpan.textContent) line.appendChild(gasSpan);
+      if (feeSpan.textContent) line.appendChild(feeSpan);
+      if (speedSpan.textContent) line.appendChild(speedSpan);
+
+      wrapper.appendChild(line);
+    });
+
+    td.appendChild(wrapper);
+  }
+
+  tr.appendChild(td);
+  return tr;
+}
+
+function toggleGasDetailsRow (baseRow, chainId, toggleBtn) {
+  const tbody = baseRow.parentElement;
+  if (!tbody) return;
+
+  const next = baseRow.nextElementSibling;
+
+  // すでに詳細行が付いている場合 → 閉じる
+  if (next && next.classList.contains('fee-details-row')) {
+    next.remove();
+    if (toggleBtn) toggleBtn.textContent = '▾';
+    return;
+  }
+
+  // 新しく詳細行を追加
+  const detailsTr = createGasDetailsRow(chainId);
+  tbody.insertBefore(detailsTr, baseRow.nextSibling);
+  if (toggleBtn) toggleBtn.textContent = '▴';
 }
 
 // ----- 検索フィルタ -----
@@ -390,7 +500,7 @@ function renderHistoryChart () {
   ctx.stroke();
 }
 
-// ----- fee ツールチップ -----
+// ----- fee ツールチップ（正確な値のみ）-----
 
 function closeAllTooltips () {
   document.querySelectorAll('.fee-tooltip').forEach(el => el.remove());
@@ -405,54 +515,16 @@ function handleTooltipOutsideClick (e) {
   }
 }
 
-function buildTierHtmlForChain (chainId) {
-  const snapshot = STATE.snapshot;
-  if (!snapshot || !snapshot[chainId] || !snapshot[chainId].tieredSpeed) return '';
-
-  const snap = snapshot[chainId];
-  if (!Array.isArray(snap.tiers) || !snap.tiers.length) return '';
-
-  const lines = snap.tiers.map(tier => {
-    const price = tier.gasPrice;
-    const unit  = tier.gasUnit || 'gwei';
-    const fee   = tier.feeUSD;
-    const minS  = tier.speedMinSec;
-    const maxS  = tier.speedMaxSec;
-    const label = tier.tier || '';
-
-    const feeLabel =
-      fee != null ? fmtFiatFromUsd(fee, STATE.fiat) : '—';
-    const speedLabel =
-      minS != null && maxS != null
-        ? `${minS.toFixed(0)}–${maxS.toFixed(0)} s`
-        : '—';
-
-    return `
-      <div class="cfs-tier-row mono">
-        <span class="cfs-tier-name">${label}</span>
-        <span class="cfs-tier-gas">${price} ${unit}</span>
-        <span class="cfs-tier-fee">${feeLabel}</span>
-        <span class="cfs-tier-speed">${speedLabel}</span>
-      </div>
-    `;
-  });
-
-  return `
-    <div class="cfs-tooltip-title" style="font-weight:600;margin-top:4px;margin-bottom:2px;">Gas tiers</div>
-    <div class="cfs-tier-table">
-      ${lines.join('')}
-    </div>
-  `;
-}
-
 function setupFeeTooltipHandler () {
   if (!TBL.tbody) return;
 
   TBL.tbody.addEventListener('click', e => {
     const btn = e.target.closest('.fee-btn');
     if (!btn) {
-      // セル以外クリックで閉じる
-      closeAllTooltips();
+      // セル以外クリックで閉じる（Details ボタンなどは別ハンドラ）
+      if (!e.target.closest('.fee-details-toggle')) {
+        closeAllTooltips();
+      }
       return;
     }
 
@@ -465,7 +537,7 @@ function setupFeeTooltipHandler () {
 
     let tooltipInfo = null;
     if (typeof buildFeeTooltipInfo === 'function') {
-      // ゼロカウント関連はもう使わない。exact だけ利用。
+      // exact だけ利用。tier / zero-count はここでは表示しない。
       tooltipInfo = buildFeeTooltipInfo(feeUsd, cfg.label, cfg.rate);
     } else {
       const exact = fmtFiatFromUsd(feeUsd, STATE.fiat) + ' ' + cfg.label;
@@ -492,10 +564,8 @@ function setupFeeTooltipHandler () {
       <div class="cfs-tooltip-line mono" style="margin-bottom:4px;">${tooltipInfo.exactLabel}</div>
     `;
 
-    // ★ Zero-count view は完全削除
-    const tierHtml = buildTierHtmlForChain(chainId);
-
-    tooltip.innerHTML = exactHtml + tierHtml;
+    // ★ Gas tier 情報はここでは出さない（Details トグルで見る）
+    tooltip.innerHTML = exactHtml;
     document.body.appendChild(tooltip);
 
     const rect = btn.getBoundingClientRect();
@@ -506,6 +576,26 @@ function setupFeeTooltipHandler () {
     tooltip.style.transform = 'translateX(-50%)';
 
     document.addEventListener('click', handleTooltipOutsideClick);
+  });
+}
+
+// ----- Gas details トグルハンドラ -----
+
+function setupDetailsToggleHandler () {
+  if (!TBL.tbody) return;
+
+  TBL.tbody.addEventListener('click', e => {
+    const btn = e.target.closest('.fee-details-toggle');
+    if (!btn) return;
+
+    e.stopPropagation();
+    const row = btn.closest('tr');
+    if (!row) return;
+
+    const chainId = btn.getAttribute('data-chain-id') || row.getAttribute('data-chain-id') || '';
+    if (!chainId) return;
+
+    toggleGasDetailsRow(row, chainId, btn);
   });
 }
 
@@ -575,6 +665,7 @@ function setupEventHandlers () {
   }
 
   setupFeeTooltipHandler();
+  setupDetailsToggleHandler();
 }
 
 // ----- Boot -----
