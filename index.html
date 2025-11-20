@@ -11,7 +11,6 @@
 
   <!-- Favicon -->
   <link rel="icon" href="assets/favicon.ico" />
-  <!-- （必要なら 32x32 / 192x192 なども後で追加可） -->
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -99,7 +98,7 @@
               <option value="express" disabled>Priority: Express (future)</option>
             </select>
 
-            <!-- ★ フィアット選択はここ（Searchカード内） -->
+            <!-- フィアット選択 -->
             <select id="fiat">
               <option value="USD" selected>Currency: USD</option>
               <option value="JPY">Currency: JPY</option>
@@ -123,7 +122,7 @@
                 <th>Ticker</th>
                 <th id="feeHeader">Fee (USD)</th>
                 <th>Speed (est.)</th>
-                <!-- ▾ ボタン用の Details 列（ラベルなし） -->
+                <!-- tiers トグル用の列 -->
                 <th class="col-details"></th>
                 <th>Status</th>
                 <th>Updated</th>
@@ -137,7 +136,7 @@
       </article>
     </section>
 
-    <!-- Phase3: Fee history preview card -->
+    <!-- Fee history preview card -->
     <section class="card cfs-history-card">
       <div class="inner">
         <div class="cfs-history-header">
@@ -182,11 +181,29 @@
     </div>
   </footer>
 
+  <!-- Exact fee 用ポップアップ（JSから位置指定） -->
+  <div
+    id="detailsTooltip"
+    style="
+      position:absolute;
+      display:none;
+      z-index:9999;
+      background:#f3f4f6;
+      border:1px solid #d1d5db;
+      border-radius:8px;
+      padding:8px 10px;
+      font-size:12px;
+      color:#111827;
+      box-shadow:0 6px 18px rgba(15,23,42,0.18);
+      max-width:260px;
+      line-height:1.4;
+    "
+  ></div>
+
   <script src="feeFormat.js"></script>
   <script src="app.js"></script>
   <!-- Cloudflare Web Analytics -->
-  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
   <!-- End Cloudflare Web Analytics -->
-
 </body>
 </html>

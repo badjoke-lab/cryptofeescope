@@ -25,26 +25,26 @@
 // ----- 定数 -----
 
 const CHAINS = [
-  { id: 'bitcoin',  chain: 'Bitcoin (L1)',         ticker: 'BTC' },
-  { id: 'ethereum', chain: 'Ethereum (L1)',        ticker: 'ETH' },
-  { id: 'arbitrum', chain: 'Arbitrum (L2 on ETH)', ticker: 'ARB' },
-  { id: 'optimism', chain: 'Optimism (L2 on ETH)', ticker: 'OP'  },
-  { id: 'solana',   chain: 'Solana (L1)',          ticker: 'SOL' },
+  { id: 'bitcoin',  chain: 'Bitcoin (L1)',           ticker: 'BTC' },
+  { id: 'ethereum', chain: 'Ethereum (L1)',          ticker: 'ETH' },
+  { id: 'arbitrum', chain: 'Arbitrum (L2 on ETH)',   ticker: 'ARB' },
+  { id: 'optimism', chain: 'Optimism (L2 on ETH)',   ticker: 'OP'  },
+  { id: 'solana',   chain: 'Solana (L1)',            ticker: 'SOL' },
   { id: 'polygon',  chain: 'Polygon (L2 / sidechain)', ticker: 'MATIC' },
-  { id: 'bsc',      chain: 'BNB Smart Chain',      ticker: 'BNB' },
-  { id: 'avalanche',chain: 'Avalanche C-Chain',    ticker: 'AVAX' },
-  { id: 'tron',     chain: 'Tron',                 ticker: 'TRX' },
-  { id: 'xrp',      chain: 'XRP Ledger',           ticker: 'XRP' },
-  { id: 'litecoin', chain: 'Litecoin',             ticker: 'LTC' },
-  { id: 'dogecoin', chain: 'Dogecoin',             ticker: 'DOGE' },
-  { id: 'cardano',  chain: 'Cardano',              ticker: 'ADA' },
-  { id: 'ton',      chain: 'TON',                  ticker: 'TON' },
-  { id: 'base',     chain: 'Base (L2 on ETH)',     ticker: 'BASE' },
-  { id: 'scroll',   chain: 'Scroll (L2 on ETH)',   ticker: 'SCR' },
-  { id: 'zksync',   chain: 'zkSync Era',           ticker: 'ZKS' },
-  { id: 'linea',    chain: 'Linea',                ticker: 'LINEA' },
-  { id: 'mantle',   chain: 'Mantle',               ticker: 'MNT' },
-  { id: 'sei',      chain: 'Sei',                  ticker: 'SEI' },
+  { id: 'bsc',      chain: 'BNB Smart Chain',        ticker: 'BNB' },
+  { id: 'avalanche',chain: 'Avalanche C-Chain',      ticker: 'AVAX' },
+  { id: 'tron',     chain: 'Tron',                   ticker: 'TRX' },
+  { id: 'xrp',      chain: 'XRP Ledger',             ticker: 'XRP' },
+  { id: 'litecoin', chain: 'Litecoin',               ticker: 'LTC' },
+  { id: 'dogecoin', chain: 'Dogecoin',               ticker: 'DOGE' },
+  { id: 'cardano',  chain: 'Cardano',                ticker: 'ADA' },
+  { id: 'ton',      chain: 'TON',                    ticker: 'TON' },
+  { id: 'base',     chain: 'Base (L2 on ETH)',       ticker: 'BASE' },
+  { id: 'scroll',   chain: 'Scroll (L2 on ETH)',     ticker: 'SCR' },
+  { id: 'zksync',   chain: 'zkSync Era',             ticker: 'ZKS' },
+  { id: 'linea',    chain: 'Linea',                  ticker: 'LINEA' },
+  { id: 'mantle',   chain: 'Mantle',                 ticker: 'MNT' },
+  { id: 'sei',      chain: 'Sei',                    ticker: 'SEI' },
 ];
 
 const FIAT_CONFIG = {
@@ -69,15 +69,15 @@ const STATE = {
 
 const TBL = {
   tbody:           document.getElementById('tbody'),
-  statusPill:      document.getElementById('statusPill'),
-  prioritySelect:  document.getElementById('prioritySelect'),
-  currencySelect:  document.getElementById('currencySelect'),
-  searchInput:     document.getElementById('searchInput'),
+  statusPill:      document.getElementById('status'),
+  prioritySelect:  document.getElementById('priority'),
+  currencySelect:  document.getElementById('fiat'),
+  searchInput:     document.getElementById('q'),
   refreshBtn:      document.getElementById('refreshBtn'),
-  updatedLabel:    document.getElementById('updatedLabel'),
+  feeHeader:       document.getElementById('feeHeader'),
   detailsTooltip:  document.getElementById('detailsTooltip'),
   historyCanvas:   document.getElementById('historyCanvas'),
-  historySelect:   document.getElementById('historyChainSelect'),
+  historySelect:   document.getElementById('historyChain'),
 };
 
 const ERR_BANNER_ID = 'error-banner';
@@ -120,6 +120,13 @@ function nowTime () {
 
 function setStatus (text) {
   if (TBL.statusPill) TBL.statusPill.textContent = text;
+}
+
+function updateFeeHeader () {
+  if (!TBL.feeHeader) return;
+  const cur = STATE.fiat;
+  const label = cur === 'JPY' ? 'Fee (JPY)' : 'Fee (USD)';
+  TBL.feeHeader.textContent = label;
 }
 
 function showErrorBanner (msg) {
@@ -226,12 +233,10 @@ function applyFilter () {
         (row.id || '');
       return hay.toLowerCase().includes(q);
     })
-    .map(row => {
-      return {
-        ...row,
-        _priority: prio,
-      };
-    });
+    .map(row => ({
+      ...row,
+      _priority: prio,
+    }));
 
   if (!rows.length) {
     TBL.tbody.innerHTML = `
@@ -263,6 +268,7 @@ function applyFilter () {
 
       const detailsCell = hasTiers
         ? `<button
+               type="button"
                class="details-btn"
                data-chain-id="${r.id || ''}"
                style="font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;"
@@ -282,6 +288,7 @@ function applyFilter () {
           <td><span class="mono">${r.ticker}</span></td>
           <td>${feeCell}</td>
           <td><span class="mono">${fmtSpeed(r.speedSec)}</span></td>
+          <td>${detailsCell}</td>
           <td>
             <span class="pill pill-${r.status || 'avg'}">${statusLabel}</span>
           </td>
@@ -296,42 +303,64 @@ function applyFilter () {
 
 // ----- Tooltip (Exact fee) -----
 
+let FEE_TOOLTIP_BOUND = false;
+
 function attachFeeTooltipHandlers () {
   const tooltip = TBL.detailsTooltip;
-  if (!tooltip) return;
+  if (!TBL.tbody || !tooltip || FEE_TOOLTIP_BOUND) return;
+  FEE_TOOLTIP_BOUND = true;
 
-  tooltip.style.display = 'none';
+  const hide = () => {
+    tooltip.style.display = 'none';
+  };
 
-  const feeBtns = document.querySelectorAll('.fee-btn');
-  feeBtns.forEach(btn => {
-    btn.addEventListener('mouseenter', () => {
-      const feeUsd = Number(btn.getAttribute('data-fee-usd'));
-      const chainId = btn.getAttribute('data-chain-id') || '';
-      const snap = STATE.snapshot && STATE.snapshot[chainId];
-      const tiers = snap && Array.isArray(snap.tiers) ? snap.tiers : [];
+  // fee セルクリックで正確値ポップアップ
+  TBL.tbody.addEventListener('click', e => {
+    const btn = e.target.closest('.fee-btn');
+    if (!btn) return;
+    e.stopPropagation();
 
-      let html = `<div class="mono" style="font-size:12px;">Exact fee (USD): ${feeUsd.toFixed(6)}</div>`;
-      if (tiers.length) {
-        html += '<div style="margin-top:4px;font-size:11px;">';
-        tiers.forEach(t => {
-          html += `<div>${t.label || t.tier}: ${t.feeUSD != null ? t.feeUSD.toFixed(6) : '—'} USD</div>`;
-        });
-        html += '</div>';
-      }
+    const raw = btn.getAttribute('data-fee-usd');
+    const feeUsd = raw == null ? null : Number(raw);
+    if (feeUsd == null || !isFinite(feeUsd)) {
+      hide();
+      return;
+    }
 
-      tooltip.innerHTML = html;
+    const chainId = btn.getAttribute('data-chain-id') || '';
+    const snap = STATE.snapshot && STATE.snapshot[chainId];
+    const tiers = snap && Array.isArray(snap.tiers) ? snap.tiers : [];
+    const cur = STATE.fiat;
 
-      const rect = btn.getBoundingClientRect();
-      tooltip.style.left = rect.left + 'px';
-      tooltip.style.top = rect.bottom + 4 + 'px';
-      tooltip.style.display = 'block';
-    });
+    let html = `<div class="mono" style="font-size:12px;margin-bottom:4px;">Exact fee: ${fmtFiatFromUsd(feeUsd, cur)}</div>`;
+    if (tiers.length) {
+      html += '<div style="font-size:11px;">';
+      tiers.forEach(t => {
+        const label = t.label || t.tier;
+        const feeStr =
+          t.feeUSD == null ? '—' : fmtFiatFromUsd(t.feeUSD, cur);
+        html += `<div>${label}: ${feeStr}</div>`;
+      });
+      html += '</div>';
+    }
 
-    btn.addEventListener('mouseleave', () => {
-      if (TBL.detailsTooltip) {
-        TBL.detailsTooltip.style.display = 'none';
-      }
-    });
+    tooltip.innerHTML = html;
+
+    const rect = btn.getBoundingClientRect();
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+    tooltip.style.left = `${rect.left + scrollX}px`;
+    tooltip.style.top = `${rect.bottom + 6 + scrollY}px`;
+    tooltip.style.display = 'block';
+  });
+
+  // 外側クリックで閉じる
+  document.addEventListener('click', e => {
+    if (!tooltip) return;
+    if (e.target.closest('.fee-btn') || e.target.closest('#detailsTooltip')) {
+      return;
+    }
+    hide();
   });
 }
 
@@ -359,7 +388,7 @@ function toggleGasDetailsRow (rowEl, chainId, btnEl) {
             const fee =
               t.feeUSD == null
                 ? '—'
-                : `${t.feeUSD.toFixed(6)} USD`;
+                : fmtFiatFromUsd(t.feeUSD, 'USD');
             const speed =
               t.speedMinSec && t.speedMaxSec && t.speedMinSec !== t.speedMaxSec
                 ? `${fmtSpeed(t.speedMinSec)}–${fmtSpeed(t.speedMaxSec)}`
@@ -373,20 +402,27 @@ function toggleGasDetailsRow (rowEl, chainId, btnEl) {
   if (btnEl) btnEl.textContent = '▲ Details';
 }
 
+let DETAILS_BOUND = false;
+
 function attachDetailsHandlers () {
-  const btns = document.querySelectorAll('.details-btn');
-  btns.forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      const row = btn.closest('tr');
-      if (!row) return;
+  if (!TBL.tbody || DETAILS_BOUND) return;
+  DETAILS_BOUND = true;
 
-      const chainId = btn.getAttribute('data-chain-id') || row.getAttribute('data-chain-id') || '';
-      if (!chainId) return;
+  TBL.tbody.addEventListener('click', e => {
+    const btn = e.target.closest('.details-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      toggleGasDetailsRow(row, chainId, btn);
-    });
+    const row = btn.closest('tr');
+    if (!row) return;
+    const chainId =
+      btn.getAttribute('data-chain-id') ||
+      row.getAttribute('data-chain-id') ||
+      '';
+    if (!chainId) return;
+
+    toggleGasDetailsRow(row, chainId, btn);
   });
 }
 
@@ -412,12 +448,8 @@ function drawHistory () {
   const ctx = canvas.getContext('2d');
   const rows = STATE.history;
   if (!rows.length) {
+    // データ無しなら何も描かず空のカードにする
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '12px system-ui';
-    ctx.fillStyle = '#999';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('No history yet', canvas.width / 2, canvas.height / 2);
     return;
   }
 
@@ -434,8 +466,9 @@ function drawHistory () {
   const span = maxFee - minFee || 1;
 
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = getComputedStyle(document.documentElement)
-    .getPropertyValue('--surface-alt') || '#f9fafb';
+  ctx.fillStyle =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--surface-alt') || '#f9fafb';
   ctx.fillRect(0, 0, w, h);
 
   ctx.strokeStyle = '#e5e7eb';
@@ -469,7 +502,9 @@ function setupEventHandlers () {
   if (TBL.currencySelect) {
     TBL.currencySelect.addEventListener('change', () => {
       STATE.fiat = TBL.currencySelect.value || 'USD';
+      updateFeeHeader();
       applyFilter();
+      drawHistory();
     });
   }
 
@@ -535,6 +570,12 @@ async function refreshOnce ({ showGlow = true } = {}) {
 // ----- Boot -----
 
 (function boot () {
+  // 初期フィアットをセレクトボックスから拾う
+  if (TBL.currencySelect && TBL.currencySelect.value) {
+    STATE.fiat = TBL.currencySelect.value;
+  }
+  updateFeeHeader();
+
   setStatus('Updated —');
   setupEventHandlers();
   refreshOnce({ showGlow: false });
