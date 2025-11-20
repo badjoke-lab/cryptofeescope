@@ -1,10 +1,10 @@
 // api/snapshot.js
-// 互換モード版: 既存フロントが拾いそうな形をできるだけ全部入れる
+// CommonJS 版：app.js が期待している形式 { bitcoin: {...}, ethereum: {...}, ... } を返す
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
-// -------- 共通ユーティリティ --------
+// ---------- 共通ユーティリティ ----------
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
@@ -17,52 +17,40 @@ async function fetchJson(url, options = {}) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} for ${url}: ${text.slice(0, 200)}`);
+    throw new Error(`HTTP ${res.status} ${url}: ${text.slice(0, 200)}`);
   }
   return res.json();
 }
 
-async function safeBuildChain(builder, baseInfo, ctx) {
+function decideStatus(feeUsd, speedSec) {
+  const fee = Number(feeUsd) || 0;
+  const s = Number(speedSec) || 0;
+  if (fee < 0.05 && s < 5 * 60) return "fast";
+  if (fee > 1 || s > 60 * 60) return "slow";
+  return "avg";
+}
+
+async function safeBuild(builder) {
   try {
-    const chain = await builder(ctx);
-    return {
-      ...baseInfo,
-      ...chain,
-      error: null,
-    };
+    return await builder();
   } catch (e) {
-    console.error(`[snapshot] ${baseInfo.id} failed:`, e.message);
+    console.error("[snapshot] chain failed:", e.message);
     const now = new Date().toISOString();
     return {
-      ...baseInfo,
-      feeUsd: null,
+      feeUSD: null,
       speedSec: null,
-      status: "error",
-      updatedAt: now,
+      status: "avg",
+      updated: now,
       tiers: [],
-      fees: {},
-      speeds: {},
-      current: { usd: null, speedSec: null },
-      meta: {
-        error: e.message.slice(0, 200),
-      },
+      error: e.message.slice(0, 200),
     };
   }
 }
 
-function deriveStatus(feeUsd, speedSec) {
-  if (feeUsd == null || speedSec == null) return "unknown";
-  if (feeUsd < 0.01 && speedSec < 60) return "fast-cheap";
-  if (feeUsd < 0.5 && speedSec < 600) return "normal";
-  if (feeUsd < 5 && speedSec < 3600) return "slow";
-  return "expensive";
-}
-
-// -------- 価格取得（USD） --------
+// ---------- 価格（USD） ----------
 
 async function getUsdPrices() {
   const ids = ["bitcoin", "ethereum", "solana", "arbitrum", "optimism"];
-
   const params = new URLSearchParams({
     ids: ids.join(","),
     vs_currencies: "usd",
@@ -99,95 +87,71 @@ async function getUsdPrices() {
   }
 }
 
-// -------- 各チェーン --------
+// ---------- 各チェーン ----------
 
-// BTC: mempool.space recommended fees
-async function buildBitcoin({ prices }) {
+// Bitcoin（L1）: mempool.space recommended fees
+async function buildBitcoin(prices) {
   const btcPrice = prices.BTC;
   if (!btcPrice) throw new Error("No BTC price");
 
   const data = await fetchJson("https://mempool.space/api/v1/fees/recommended");
-  const TX_VBYTES = 140; // 1-in-2-out tx を想定
+  const TX_VBYTES = 140; // ざっくり 1 in 2 out
 
-  const rawTiers = [
+  const tiersSrc = [
     {
       key: "fast",
       label: "Fast (~10 min)",
       feeRate: data.fastestFee,
-      speedSec: 10 * 60,
+      speed: 10 * 60,
     },
     {
-      key: "standard", // normal の別名
+      key: "standard",
       label: "Normal (~30 min)",
       feeRate: data.halfHourFee,
-      speedSec: 30 * 60,
+      speed: 30 * 60,
     },
     {
       key: "slow",
       label: "Slow (~60 min)",
       feeRate: data.hourFee,
-      speedSec: 60 * 60,
+      speed: 60 * 60,
     },
   ];
 
-  const tiersArray = rawTiers.map((t) => {
+  const tiers = tiersSrc.map((t) => {
     const feeBtc = (t.feeRate * TX_VBYTES) / 1e8;
     const feeUsd = feeBtc * btcPrice;
     return {
       tier: t.key,
       label: t.label,
-      feeRate: t.feeRate,
+      gasPrice: t.feeRate,
       gasUnit: "sat/vB",
       txVbytes: TX_VBYTES,
-      feeBtc,
-      feeUsd,
-      speedSec: t.speedSec,
+      feeUSD: feeUsd,
+      speedMinSec: t.speed,
+      speedMaxSec: t.speed,
     };
   });
 
-  // 互換のための object 形式
-  const feesUsd = {};
-  const speeds = {};
-  for (const t of tiersArray) {
-    feesUsd[t.tier] = t.feeUsd;
-    speeds[t.tier] = t.speedSec;
-    if (t.tier === "standard") {
-      // 「normal」を見るコード対策
-      feesUsd.normal = t.feeUsd;
-      speeds.normal = t.speedSec;
-    }
-  }
-
   const main =
-    tiersArray.find((t) => t.tier === "standard") || tiersArray[0] || null;
+    tiers.find((t) => t.tier === "standard") || tiers[0] || null;
 
   const now = new Date().toISOString();
-  const feeMain = main ? main.feeUsd : null;
-  const speedMain = main ? main.speedSec : null;
+  const feeMain = main ? main.feeUSD : null;
+  const speedMain = main ? main.speedMinSec : null;
 
   return {
-    feeUsd: feeMain,
+    feeUSD: feeMain,
     speedSec: speedMain,
-    status: main ? deriveStatus(feeMain, speedMain) : "unknown",
-    updatedAt: now,
-    tiers: tiersArray,
-    fees: {
-      usd: feesUsd,
-    },
-    speeds,
-    current: {
-      usd: feeMain,
-      speedSec: speedMain,
-    },
-    meta: {
-      priceUsd: btcPrice,
-      source: "mempool.space",
-    },
+    status: decideStatus(feeMain, speedMain),
+    updated: now,
+    tiers,
+    priceUSD: btcPrice,
   };
 }
 
-// ETH: Etherscan Gas Oracle v2
-async function buildEthereum({ prices }) {
+// Ethereum（L1）: Etherscan Gas Oracle v2
+async function buildEthereum(prices) {
   const ethPrice = prices.ETH;
   if (!ethPrice) throw new Error("No ETH price");
   if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
@@ -207,7 +171,7 @@ async function buildEthereum({ prices }) {
   const r = data.result;
   const GAS_LIMIT = 21000;
 
-  function makeTier(key, gwei, label, speedSec) {
+  function mkTier(key, gwei, label, speedSec) {
     const g = Number(gwei) || 0;
     const gasPriceEth = g * 1e-9;
     const feeEth = gasPriceEth * GAS_LIMIT;
@@ -218,59 +182,37 @@ async function buildEthereum({ prices }) {
       gasPrice: g,
       gasUnit: "gwei",
       gasLimit: GAS_LIMIT,
-      feeEth,
-      feeUsd,
-      speedSec,
+      feeUSD: feeUsd,
+      speedMinSec: speedSec,
+      speedMaxSec: speedSec,
     };
   }
 
-  const tiersArray = [
-    makeTier("fast", r.FastGasPrice, "Fast (~30 sec)", 30),
-    makeTier("standard", r.ProposeGasPrice, "Normal (~2 min)", 120),
-    makeTier("slow", r.SafeGasPrice, "Slow (~5 min)", 300),
+  const tiers = [
+    mkTier("fast", r.FastGasPrice, "Fast (~30 sec)", 30),
+    mkTier("standard", r.ProposeGasPrice, "Normal (~2 min)", 120),
+    mkTier("slow", r.SafeGasPrice, "Slow (~5 min)", 300),
   ];
 
-  const feesUsd = {};
-  const speeds = {};
-  for (const t of tiersArray) {
-    feesUsd[t.tier] = t.feeUsd;
-    speeds[t.tier] = t.speedSec;
-    if (t.tier === "standard") {
-      feesUsd.normal = t.feeUsd;
-      speeds.normal = t.speedSec;
-    }
-  }
-
   const main =
-    tiersArray.find((t) => t.tier === "standard") || tiersArray[0] || null;
+    tiers.find((t) => t.tier === "standard") || tiers[0] || null;
 
   const now = new Date().toISOString();
-  const feeMain = main ? main.feeUsd : null;
-  const speedMain = main ? main.speedSec : null;
+  const feeMain = main ? main.feeUSD : null;
+  const speedMain = main ? main.speedMinSec : null;
 
   return {
-    feeUsd: feeMain,
+    feeUSD: feeMain,
     speedSec: speedMain,
-    status: main ? deriveStatus(feeMain, speedMain) : "unknown",
-    updatedAt: now,
-    tiers: tiersArray,
-    fees: {
-      usd: feesUsd,
-    },
-    speeds,
-    current: {
-      usd: feeMain,
-      speedSec: speedMain,
-    },
-    meta: {
-      priceUsd: ethPrice,
-      gasOracleSource: "Etherscan Gas Oracle v2",
-    },
+    status: decideStatus(feeMain, speedMain),
+    updated: now,
+    tiers,
+    priceUSD: ethPrice,
   };
 }
 
-// SOL: base fee のみ（priority fee はまだ入れない）
-async function buildSolana({ prices }) {
+// Solana（L1）: base fee のみ
+async function buildSolana(prices) {
   const solPrice = prices.SOL;
   if (!solPrice) throw new Error("No SOL price");
 
@@ -279,107 +221,77 @@ async function buildSolana({ prices }) {
   const lamports = LAMPORTS_PER_SIGNATURE * signatures;
   const feeSol = lamports / 1e9;
   const feeUsd = feeSol * solPrice;
-  const speedSec = 10;
+  const speed = 10; // 秒
 
-  const tiersArray = [
-    {
-      tier: "base",
-      label: "Base fee (no priority)",
-      lamports,
-      lamportsPerSignature: LAMPORTS_PER_SIGNATURE,
-      signatures,
-      feeSol,
-      feeUsd,
-      speedSec,
-    },
-  ];
+  const tier = {
+    tier: "base",
+    label: "Base fee (no priority)",
+    lamports,
+    lamportsPerSignature: LAMPORTS_PER_SIGNATURE,
+    signatures,
+    feeUSD: feeUsd,
+    speedMinSec: speed,
+    speedMaxSec: speed,
+  };
 
   const now = new Date().toISOString();
 
   return {
-    feeUsd,
-    speedSec,
-    status: deriveStatus(feeUsd, speedSec),
-    updatedAt: now,
-    tiers: tiersArray,
-    fees: {
-      usd: {
-        base: feeUsd,
-      },
-    },
-    speeds: {
-      base: speedSec,
-    },
-    current: {
-      usd: feeUsd,
-      speedSec,
-    },
-    meta: {
-      priceUsd: solPrice,
-      note: "Priority fee not included (base fee only)",
-    },
+    feeUSD: feeUsd,
+    speedSec: speed,
+    status: decideStatus(feeUsd, speed),
+    updated: now,
+    tiers: [tier],
+    priceUSD: solPrice,
   };
 }
 
-// L2: まだロジックが決まってないので値は出さない
-async function buildL2Placeholder({ prices }, which) {
+// Arbitrum / Optimism（L2）: まだ安全なロジックが固まっていないので値は出さない
+async function buildL2Placeholder(prices, which) {
   const price =
-    which === "arb" ? prices.ARB : which === "op" ? prices.OP : null;
+    which === "arbitrum" ? prices.ARB : which === "optimism" ? prices.OP : null;
   const now = new Date().toISOString();
 
   return {
-    feeUsd: null,
+    feeUSD: null,
     speedSec: null,
-    status: "unknown",
-    updatedAt: now,
+    status: "avg",
+    updated: now,
     tiers: [],
-    fees: { usd: {} },
-    speeds: {},
-    current: { usd: null, speedSec: null },
-    meta: {
-      priceUsd: price,
-      note:
-        "L2 fee estimation not yet implemented; showing placeholder only (no fake values).",
-    },
+    priceUSD: price,
+    note:
+      "L2 fee estimation not yet implemented; placeholder only (no fake values).",
   };
 }
 
-// -------- メインハンドラ --------
+// ---------- ハンドラ ----------
 
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+module.exports = async function (req, res) {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
 
-  const generatedAt = new Date().toISOString();
-  const prices = await getUsdPrices();
+    const prices = await getUsdPrices();
 
-  const baseInfos = [
-    { id: "btc", name: "Bitcoin", ticker: "BTC", layer: "L1", family: "bitcoin" },
-    { id: "eth", name: "Ethereum", ticker: "ETH", layer: "L1", family: "evm" },
-    { id: "arb", name: "Arbitrum One", ticker: "ARB", layer: "L2", family: "evm" },
-    { id: "op", name: "Optimism", ticker: "OP", layer: "L2", family: "evm" },
-    { id: "sol", name: "Solana", ticker: "SOL", layer: "L1", family: "solana" },
-  ];
+    const snapshot = {};
+    snapshot.bitcoin = await safeBuild(() => buildBitcoin(prices));
+    snapshot.ethereum = await safeBuild(() => buildEthereum(prices));
+    snapshot.arbitrum = await safeBuild(() =>
+      buildL2Placeholder(prices, "arbitrum")
+    );
+    snapshot.optimism = await safeBuild(() =>
+      buildL2Placeholder(prices, "optimism")
+    );
+    snapshot.solana = await safeBuild(() => buildSolana(prices));
 
-  const ctx = { prices };
-
-  const [btc, eth, arb, op, sol] = await Promise.all([
-    safeBuildChain(buildBitcoin, baseInfos[0], ctx),
-    safeBuildChain(buildEthereum, baseInfos[1], ctx),
-    safeBuildChain((c) => buildL2Placeholder(c, "arb"), baseInfos[2], ctx),
-    safeBuildChain((c) => buildL2Placeholder(c, "op"), baseInfos[3], ctx),
-    safeBuildChain(buildSolana, baseInfos[4], ctx),
-  ]);
-
-  const payload = {
-    ok: true,
-    generatedAt,
-    pricesUsd: prices,
-    chains: [btc, eth, arb, op, sol],
-  };
-
-  return res.status(200).json(payload);
-}
+    return res.status(200).json(snapshot);
+  } catch (e) {
+    console.error("[snapshot] fatal error:", e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+};
