@@ -311,11 +311,25 @@ export default async function handler(req, res) {
     safeBuildChain(buildSolana, baseInfos[4], ctx),
   ]);
 
+  const chains = [btc, eth, arb, op, sol];
+
+  // 旧 app.js 互換用：id → chain マップ
+  const byId = {};
+  for (const c of chains) {
+    byId[c.id] = c;
+  }
+
   const payload = {
     ok: true,
     generatedAt,
     pricesUsd: prices,
-    chains: [btc, eth, arb, op, sol],
+    chains,
+    // 互換フィールド（snapshot.btc / snapshot.eth / snapshot.data.btc ...）
+    ...byId,
+    data: {
+      chains,
+      ...byId,
+    },
   };
 
   return res.status(200).json(payload);
