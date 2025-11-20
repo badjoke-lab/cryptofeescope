@@ -310,10 +310,17 @@ tbody tr:hover{
 [data-theme="dark"] .gas-tiers-title{
   color:#e5e7eb;
 }
+
+/* ★ ここを揃え用に変更：3 行×4 列をきっちり縦揃え */
 .gas-tier-line{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px 16px;
+  display:grid;
+  grid-template-columns:
+    minmax(60px,auto)   /* low / standard / high */
+    minmax(80px,auto)   /* 9 gwei */
+    minmax(80px,auto)   /* $0.55 */
+    minmax(110px,auto); /* 180–300 s */
+  column-gap:16px;
+  row-gap:2px;
   font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 .gas-tier-label{
@@ -392,7 +399,7 @@ footer .note{
 .cfs-history-card .inner{
   padding-top:10px;
   padding-bottom:10px;
-  max-height: 210px;    
+  max-height:210px;
 }
 
 .cfs-history-header{
@@ -426,6 +433,6 @@ footer .note{
 
 #historyCanvas{
   width:100%;
-  min-height:50px;   /* さらに低く */
+  min-height:50px;
   display:block;
 }
