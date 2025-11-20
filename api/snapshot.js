@@ -1,6 +1,10 @@
 // api/snapshot.js
+// 互換モード版: 既存フロントが拾いそうな形をできるだけ全部入れる
 
-// ===== 共通ユーティリティ =====
+const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+
+// -------- 共通ユーティリティ --------
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
@@ -36,6 +40,9 @@ async function safeBuildChain(builder, baseInfo, ctx) {
       status: "error",
       updatedAt: now,
       tiers: [],
+      fees: {},
+      speeds: {},
+      current: { usd: null, speedSec: null },
       meta: {
         error: e.message.slice(0, 200),
       },
@@ -51,35 +58,37 @@ function deriveStatus(feeUsd, speedSec) {
   return "expensive";
 }
 
-// ===== 価格取得（Coinbase, 認証不要） =====
-//
-// https://api.coinbase.com/v2/exchange-rates?currency=USD
-// → { data: { currency: "USD", rates: { BTC: "0.000015", ETH: "...", ... } } }
-// これは「1 USD = x BTC」というレートなので priceUsd = 1 / x で求める。
+// -------- 価格取得（USD） --------
 
 async function getUsdPrices() {
-  try {
-    const data = await fetchJson(
-      "https://api.coinbase.com/v2/exchange-rates?currency=USD"
-    );
-    const rates = data?.data?.rates || {};
+  const ids = ["bitcoin", "ethereum", "solana", "arbitrum", "optimism"];
 
-    function priceFromRate(symbol) {
-      const r = Number(rates[symbol]);
-      if (!r || !isFinite(r) || r <= 0) return null;
-      // 1 USD = r BTC → 1 BTC = 1 / r USD
-      return 1 / r;
-    }
+  const params = new URLSearchParams({
+    ids: ids.join(","),
+    vs_currencies: "usd",
+  });
+
+  const usePro = !!COINGECKO_API_KEY;
+  const baseUrl = usePro
+    ? "https://pro-api.coingecko.com/api/v3/simple/price"
+    : "https://api.coingecko.com/api/v3/simple/price";
+
+  const headers = usePro ? { "x-cg-pro-api-key": COINGECKO_API_KEY } : {};
+
+  try {
+    const data = await fetchJson(`${baseUrl}?${params.toString()}`, {
+      headers,
+    });
 
     return {
-      BTC: priceFromRate("BTC"),
-      ETH: priceFromRate("ETH"),
-      SOL: priceFromRate("SOL"),
-      ARB: priceFromRate("ARB") ?? null, // Coinbase に無ければ null
-      OP: priceFromRate("OP") ?? null,
+      BTC: data.bitcoin?.usd ?? null,
+      ETH: data.ethereum?.usd ?? null,
+      SOL: data.solana?.usd ?? null,
+      ARB: data.arbitrum?.usd ?? null,
+      OP: data.optimism?.usd ?? null,
     };
   } catch (e) {
-    console.error("[snapshot] price fetch failed (Coinbase):", e.message);
+    console.error("[snapshot] price fetch failed:", e.message);
     return {
       BTC: null,
       ETH: null,
@@ -90,98 +99,121 @@ async function getUsdPrices() {
   }
 }
 
-// ===== 各チェーン =====
+// -------- 各チェーン --------
 
-// BTC: mempool.space の Recommended Fees
-// https://mempool.space/api/v1/fees/recommended
+// BTC: mempool.space recommended fees
 async function buildBitcoin({ prices }) {
   const btcPrice = prices.BTC;
-  if (!btcPrice) throw new Error("No BTC price from Coinbase");
+  if (!btcPrice) throw new Error("No BTC price");
 
-  const data = await fetchJson(
-    "https://mempool.space/api/v1/fees/recommended"
-  );
+  const data = await fetchJson("https://mempool.space/api/v1/fees/recommended");
+  const TX_VBYTES = 140; // 1-in-2-out tx を想定
 
-  const TX_VBYTES = 140; // ざっくり 1-in-2-out の送金
-
-  const tiers = [
+  const rawTiers = [
     {
-      tier: "fast",
+      key: "fast",
       label: "Fast (~10 min)",
       feeRate: data.fastestFee,
       speedSec: 10 * 60,
     },
     {
-      tier: "normal",
+      key: "standard", // normal の別名
       label: "Normal (~30 min)",
       feeRate: data.halfHourFee,
       speedSec: 30 * 60,
     },
     {
-      tier: "slow",
+      key: "slow",
       label: "Slow (~60 min)",
       feeRate: data.hourFee,
       speedSec: 60 * 60,
     },
-  ].map((t) => {
+  ];
+
+  const tiersArray = rawTiers.map((t) => {
     const feeBtc = (t.feeRate * TX_VBYTES) / 1e8;
     const feeUsd = feeBtc * btcPrice;
     return {
-      ...t,
+      tier: t.key,
+      label: t.label,
+      feeRate: t.feeRate,
       gasUnit: "sat/vB",
+      txVbytes: TX_VBYTES,
       feeBtc,
       feeUsd,
+      speedSec: t.speedSec,
     };
   });
 
-  const main = tiers[1] || tiers[0];
+  // 互換のための object 形式
+  const feesUsd = {};
+  const speeds = {};
+  for (const t of tiersArray) {
+    feesUsd[t.tier] = t.feeUsd;
+    speeds[t.tier] = t.speedSec;
+    if (t.tier === "standard") {
+      // 「normal」を見るコード対策
+      feesUsd.normal = t.feeUsd;
+      speeds.normal = t.speedSec;
+    }
+  }
+
+  const main =
+    tiersArray.find((t) => t.tier === "standard") || tiersArray[0] || null;
+
   const now = new Date().toISOString();
+  const feeMain = main ? main.feeUsd : null;
+  const speedMain = main ? main.speedSec : null;
 
   return {
-    feeUsd: main ? main.feeUsd : null,
-    speedSec: main ? main.speedSec : null,
-    status: main ? deriveStatus(main.feeUsd, main.speedSec) : "unknown",
+    feeUsd: feeMain,
+    speedSec: speedMain,
+    status: main ? deriveStatus(feeMain, speedMain) : "unknown",
     updatedAt: now,
-    tiers,
+    tiers: tiersArray,
+    fees: {
+      usd: feesUsd,
+    },
+    speeds,
+    current: {
+      usd: feeMain,
+      speedSec: speedMain,
+    },
     meta: {
       priceUsd: btcPrice,
-      priceSource: "Coinbase /v2/exchange-rates",
-      feeSource: "mempool.space recommended fees",
+      source: "mempool.space",
     },
   };
 }
 
-// ETH (L1): Etherscan Gas Oracle v2
+// ETH: Etherscan Gas Oracle v2
 async function buildEthereum({ prices }) {
   const ethPrice = prices.ETH;
-  if (!ethPrice) throw new Error("No ETH price from Coinbase");
-
-  const apiKey = process.env.ETHERSCAN_API_KEY || "";
-  if (!apiKey) throw new Error("ETHERSCAN_API_KEY not set");
+  if (!ethPrice) throw new Error("No ETH price");
+  if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
 
   const params = new URLSearchParams({
     module: "gastracker",
     action: "gasoracle",
     chainid: "1",
-    apikey: apiKey,
+    apikey: ETHERSCAN_API_KEY,
   });
 
   const data = await fetchJson(
     `https://api.etherscan.io/v2/api?${params.toString()}`
   );
+  if (!data.result) throw new Error("No gasoracle.result from Etherscan");
 
   const r = data.result;
-  if (!r) throw new Error("No gasoracle.result from Etherscan");
-
   const GAS_LIMIT = 21000;
 
-  function tierFrom(gwei, label, speedSec) {
+  function makeTier(key, gwei, label, speedSec) {
     const g = Number(gwei) || 0;
     const gasPriceEth = g * 1e-9;
     const feeEth = gasPriceEth * GAS_LIMIT;
     const feeUsd = feeEth * ethPrice;
     return {
-      tier: label.toLowerCase(),
+      tier: key,
       label,
       gasPrice: g,
       gasUnit: "gwei",
@@ -192,44 +224,64 @@ async function buildEthereum({ prices }) {
     };
   }
 
-  const tiers = [
-    tierFrom(r.FastGasPrice, "Fast (~30 sec)", 30),
-    tierFrom(r.ProposeGasPrice, "Normal (~2 min)", 120),
-    tierFrom(r.SafeGasPrice, "Slow (~5 min)", 300),
+  const tiersArray = [
+    makeTier("fast", r.FastGasPrice, "Fast (~30 sec)", 30),
+    makeTier("standard", r.ProposeGasPrice, "Normal (~2 min)", 120),
+    makeTier("slow", r.SafeGasPrice, "Slow (~5 min)", 300),
   ];
 
-  const main = tiers[1] || tiers[0];
+  const feesUsd = {};
+  const speeds = {};
+  for (const t of tiersArray) {
+    feesUsd[t.tier] = t.feeUsd;
+    speeds[t.tier] = t.speedSec;
+    if (t.tier === "standard") {
+      feesUsd.normal = t.feeUsd;
+      speeds.normal = t.speedSec;
+    }
+  }
+
+  const main =
+    tiersArray.find((t) => t.tier === "standard") || tiersArray[0] || null;
+
   const now = new Date().toISOString();
+  const feeMain = main ? main.feeUsd : null;
+  const speedMain = main ? main.speedSec : null;
 
   return {
-    feeUsd: main ? main.feeUsd : null,
-    speedSec: main ? main.speedSec : null,
-    status: main ? deriveStatus(main.feeUsd, main.speedSec) : "unknown",
+    feeUsd: feeMain,
+    speedSec: speedMain,
+    status: main ? deriveStatus(feeMain, speedMain) : "unknown",
     updatedAt: now,
-    tiers,
+    tiers: tiersArray,
+    fees: {
+      usd: feesUsd,
+    },
+    speeds,
+    current: {
+      usd: feeMain,
+      speedSec: speedMain,
+    },
     meta: {
       priceUsd: ethPrice,
-      priceSource: "Coinbase /v2/exchange-rates",
       gasOracleSource: "Etherscan Gas Oracle v2",
     },
   };
 }
 
-// SOL: ベースフィーのみ（優先料金はまだ入れない）
+// SOL: base fee のみ（priority fee はまだ入れない）
 async function buildSolana({ prices }) {
   const solPrice = prices.SOL;
-  if (!solPrice) throw new Error("No SOL price from Coinbase");
+  if (!solPrice) throw new Error("No SOL price");
 
   const LAMPORTS_PER_SIGNATURE = 5000;
-
   const signatures = 1;
   const lamports = LAMPORTS_PER_SIGNATURE * signatures;
   const feeSol = lamports / 1e9;
   const feeUsd = feeSol * solPrice;
+  const speedSec = 10;
 
-  const now = new Date().toISOString();
-
-  const tiers = [
+  const tiersArray = [
     {
       tier: "base",
       label: "Base fee (no priority)",
@@ -238,27 +290,38 @@ async function buildSolana({ prices }) {
       signatures,
       feeSol,
       feeUsd,
-      speedSec: 10,
+      speedSec,
     },
   ];
 
-  const main = tiers[0];
+  const now = new Date().toISOString();
 
   return {
-    feeUsd: main.feeUsd,
-    speedSec: main.speedSec,
-    status: deriveStatus(main.feeUsd, main.speedSec),
+    feeUsd,
+    speedSec,
+    status: deriveStatus(feeUsd, speedSec),
     updatedAt: now,
-    tiers,
+    tiers: tiersArray,
+    fees: {
+      usd: {
+        base: feeUsd,
+      },
+    },
+    speeds: {
+      base: speedSec,
+    },
+    current: {
+      usd: feeUsd,
+      speedSec,
+    },
     meta: {
       priceUsd: solPrice,
-      priceSource: "Coinbase /v2/exchange-rates",
       note: "Priority fee not included (base fee only)",
     },
   };
 }
 
-// L2（Arbitrum / Optimism）：まだ安全なロジックを詰めていないので placeholder
+// L2: まだロジックが決まってないので値は出さない
 async function buildL2Placeholder({ prices }, which) {
   const price =
     which === "arb" ? prices.ARB : which === "op" ? prices.OP : null;
@@ -270,25 +333,25 @@ async function buildL2Placeholder({ prices }, which) {
     status: "unknown",
     updatedAt: now,
     tiers: [],
+    fees: { usd: {} },
+    speeds: {},
+    current: { usd: null, speedSec: null },
     meta: {
       priceUsd: price,
-      priceSource: "Coinbase /v2/exchange-rates",
       note:
         "L2 fee estimation not yet implemented; showing placeholder only (no fake values).",
     },
   };
 }
 
-// ===== メインハンドラ =====
+// -------- メインハンドラ --------
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   const generatedAt = new Date().toISOString();
   const prices = await getUsdPrices();
@@ -311,25 +374,11 @@ export default async function handler(req, res) {
     safeBuildChain(buildSolana, baseInfos[4], ctx),
   ]);
 
-  const chains = [btc, eth, arb, op, sol];
-
-  // 旧 app.js 互換用：id → chain マップ
-  const byId = {};
-  for (const c of chains) {
-    byId[c.id] = c;
-  }
-
   const payload = {
     ok: true,
     generatedAt,
     pricesUsd: prices,
-    chains,
-    // 互換フィールド（snapshot.btc / snapshot.eth / snapshot.data.btc ...）
-    ...byId,
-    data: {
-      chains,
-      ...byId,
-    },
+    chains: [btc, eth, arb, op, sol],
   };
 
   return res.status(200).json(payload);
