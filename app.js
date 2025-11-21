@@ -1,587 +1,411 @@
-// ========== CryptoFeeScope — Phase2+3 (snapshot + tooltip + history + gas tiers toggle) ==========
+// ========== CryptoFeeScope — snapshot + history + fee details tooltip ==========
 
 // ----- Theme -----
-(function initTheme () {
-  const prefersDark =
-    window.matchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const saved = localStorage.getItem('theme');
-  const theme = saved || (prefersDark ? 'dark' : 'light');
+const THEME_KEY = 'cfs-theme';
+
+function getInitialTheme() {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'dark' || stored === 'light') return stored;
+  return window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+}
+
+function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem(THEME_KEY, theme);
+}
 
-  const themeBtn = document.getElementById('themeBtn');
-  if (themeBtn) {
-    themeBtn.addEventListener('click', () => {
-      const now =
-        document.documentElement.getAttribute('data-theme') === 'dark'
-          ? 'light'
-          : 'dark';
-      document.documentElement.setAttribute('data-theme', now);
-      localStorage.setItem('theme', now);
-    });
-  }
-})();
+// 初期テーマ適用
+applyTheme(getInitialTheme());
 
-// ----- 定数 -----
+// ----- DOM refs -----
+const TBL = {
+  status: document.getElementById('statusText'),
+  updated: document.getElementById('updatedText'),
+  q: document.getElementById('searchInput'),
+  priority: document.getElementById('prioritySelect'),
+  fiat: document.getElementById('fiatSelect'),
+  tbody: document.getElementById('mainTbody'),
+  historyCard: document.getElementById('historyCard'),
+  historyTitle: document.getElementById('historyTitle'),
+  historyEmpty: document.getElementById('historyEmpty'),
+  historyCanvas: document.getElementById('historyCanvas'),
+  historyChain: document.getElementById('historyChainSelect'),
+  feeHeader: document.getElementById('feeHeader'),
+};
 
+const DETAILS_TOOLTIP = document.getElementById('detailsTooltip');
+
+// ----- Config -----
+const FIAT_CONFIG = {
+  USD: { symbol: '$', key: 'usd' },
+  JPY: { symbol: '¥', key: 'jpy' },
+};
+
+// チェーン定義（表示順）
 const CHAINS = [
-  { id: 'bitcoin',  chain: 'Bitcoin (L1)',           ticker: 'BTC' },
-  { id: 'ethereum', chain: 'Ethereum (L1)',          ticker: 'ETH' },
-  { id: 'arbitrum', chain: 'Arbitrum (L2 on ETH)',   ticker: 'ARB' },
-  { id: 'optimism', chain: 'Optimism (L2 on ETH)',   ticker: 'OP'  },
-  { id: 'solana',   chain: 'Solana (L1)',            ticker: 'SOL' },
-  { id: 'polygon',  chain: 'Polygon (L2 / sidechain)', ticker: 'MATIC' },
-  { id: 'bsc',      chain: 'BNB Smart Chain',        ticker: 'BNB' },
-  { id: 'avalanche',chain: 'Avalanche C-Chain',      ticker: 'AVAX' },
-  { id: 'tron',     chain: 'Tron',                   ticker: 'TRX' },
-  { id: 'xrp',      chain: 'XRP Ledger',             ticker: 'XRP' },
-  { id: 'litecoin', chain: 'Litecoin',               ticker: 'LTC' },
-  { id: 'dogecoin', chain: 'Dogecoin',               ticker: 'DOGE' },
-  { id: 'cardano',  chain: 'Cardano',                ticker: 'ADA' },
-  { id: 'ton',      chain: 'TON',                    ticker: 'TON' },
-  { id: 'base',     chain: 'Base (L2 on ETH)',       ticker: 'BASE' },
-  { id: 'scroll',   chain: 'Scroll (L2 on ETH)',     ticker: 'SCR' },
-  { id: 'zksync',   chain: 'zkSync Era',             ticker: 'ZKS' },
-  { id: 'linea',    chain: 'Linea',                  ticker: 'LINEA' },
-  { id: 'mantle',   chain: 'Mantle',                 ticker: 'MNT' },
-  { id: 'sei',      chain: 'Sei',                    ticker: 'SEI' },
+  { id: 'btc', name: 'Bitcoin (L1)', ticker: 'BTC', family: 'bitcoin' },
+  { id: 'eth', name: 'Ethereum (L1)', ticker: 'ETH', family: 'evm' },
+  { id: 'arb', name: 'Arbitrum (L2 on ETH)', ticker: 'ARB', family: 'evm' },
+  { id: 'op',  name: 'Optimism (L2 on ETH)', ticker: 'OP',  family: 'evm' },
+  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
+  { id: 'matic', name: 'Polygon (L2 / sidechain)', ticker: 'MATIC', family: 'evm' },
+  { id: 'bnb', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
+  { id: 'avax', name: 'Avalanche C-Chain', ticker: 'AVAX', family: 'evm' },
+  { id: 'trx', name: 'Tron', ticker: 'TRX', family: 'tron' },
+  { id: 'xrp', name: 'XRP Ledger', ticker: 'XRP', family: 'xrp' },
+  { id: 'ltc', name: 'Litecoin', ticker: 'LTC', family: 'utxo' },
+  { id: 'doge', name: 'Dogecoin', ticker: 'DOGE', family: 'utxo' },
+  { id: 'ada', name: 'Cardano', ticker: 'ADA', family: 'cardano' },
+  { id: 'ton', name: 'TON', ticker: 'TON', family: 'ton' },
+  { id: 'base', name: 'Base (L2 on ETH)', ticker: 'BASE', family: 'evm' },
+  { id: 'scr', name: 'Scroll (L2 on ETH)', ticker: 'SCR', family: 'evm' },
+  { id: 'zks', name: 'zkSync Era', ticker: 'ZKS', family: 'evm' },
+  { id: 'linea', name: 'Linea', ticker: 'LINEA', family: 'evm' },
+  { id: 'mnt', name: 'Mantle', ticker: 'MNT', family: 'evm' },
+  { id: 'sei', name: 'Sei', ticker: 'SEI', family: 'sei' }
 ];
 
-const FIAT_CONFIG = {
-  USD: { label: 'USD', symbol: '$', rate: 1 },
-  JPY: { label: 'JPY', symbol: '¥', rate: 150 },
-};
-
-// ----- 状態 -----
-
 const STATE = {
-  rows: [],
-  lastError: null,
-  timer: null,
-  intervalMs: 60_000,
+  snapshot: null,      // { [id]: { feeUsd, feeJpy, speedSec, status, updatedAt, tiers, ... } }
+  history: [],         // [{ chainId, ts, feeUsd }]
   fiat: 'USD',
-  snapshot: null,
-  history: [],
-  historyChain: 'bitcoin',
+  priority: 'standard',
+  search: '',
+  lastUpdated: null,
 };
 
-// ----- DOM -----
+let AUTO_REFRESH_TIMER = null;
 
-const TBL = {
-  tbody:           document.getElementById('tbody'),
-  statusPill:      document.getElementById('status'),
-  prioritySelect:  document.getElementById('priority'),
-  currencySelect:  document.getElementById('fiat'),
-  searchInput:     document.getElementById('q'),
-  refreshBtn:      document.getElementById('refreshBtn'),
-  feeHeader:       document.getElementById('feeHeader'),
-  detailsTooltip:  document.getElementById('detailsTooltip'),
-  historyCanvas:   document.getElementById('historyCanvas'),
-  historySelect:   document.getElementById('historyChain'),
-};
-
-const ERR_BANNER_ID = 'error-banner';
-
-// ----- フィアット変換 -----
-
-function fmtFiatFromUsd (feeUsd, fiatKey) {
-  const cfg = FIAT_CONFIG[fiatKey] || FIAT_CONFIG.USD;
-  if (feeUsd == null || !isFinite(feeUsd)) return '—';
-  const converted = feeUsd * cfg.rate;
-  if (converted === 0) return cfg.symbol + '0.0000';
-  if (converted < 0.001) return cfg.symbol + converted.toFixed(4);
-  if (converted < 1) return cfg.symbol + converted.toFixed(3);
-  return cfg.symbol + converted.toFixed(2);
+// ----- Helpers -----
+function showStatus(text, type = 'ok') {
+  if (!TBL.status) return;
+  TBL.status.textContent = text;
+  TBL.status.dataset.variant = type;
 }
 
-function fmtSpeed (sec) {
-  if (sec == null || !isFinite(sec)) return '—';
-  const s = Math.max(0, Number(sec) || 0);
-  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)} s`;
-  const min = s / 60;
-  return `${min.toFixed(1)} min`;
-}
-
-function decideStatus (feeUsd, speedSec) {
-  const fee = Number(feeUsd) || 0;
-  const s   = Number(speedSec) || 0;
-  if (fee < 0.05 && s < 5) return 'fast';
-  if (fee > 0.5 || s > 15) return 'slow';
-  return 'avg';
-}
-
-function nowTime () {
-  const d  = new Date();
+function fmtTime(date) {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return '—';
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
 }
 
-function setStatus (text) {
-  if (TBL.statusPill) TBL.statusPill.textContent = text;
+function fmtSpeed(sec) {
+  if (sec == null || !Number.isFinite(sec)) return '—';
+  if (sec < 90) return `${Math.round(sec)} s`;
+  const m = sec / 60;
+  return `${m.toFixed(1)} min`;
 }
 
-function updateFeeHeader () {
+function fmtFiatFromUsd(feeUsd, fiat) {
+  if (feeUsd == null || !Number.isFinite(feeUsd)) return '—';
+  const cfg = FIAT_CONFIG[fiat] || FIAT_CONFIG.USD;
+  if (fiat === 'USD') {
+    if (feeUsd < 0.001) return '< $0.001';
+    return `${cfg.symbol}${feeUsd.toFixed(3)}`;
+  }
+  // JPY 想定：snapshot 側ですでに fiat 変換済みならその値を使う
+  const value = feeUsd;
+  return `${cfg.symbol}${value.toFixed(2)}`;
+}
+
+function decideStatusTag(sec) {
+  if (sec == null || !Number.isFinite(sec)) return { label: 'Avg', className: '' };
+  if (sec <= 60) return { label: 'Fast', className: 'good' };
+  if (sec <= 600) return { label: 'Avg', className: '' };
+  return { label: 'Slow', className: 'warn' };
+}
+
+// ----- API -----
+async function fetchAll() {
+  showStatus('Loading…', 'loading');
+
+  try {
+    const [snapshotRes, historyRes] = await Promise.all([
+      fetch('/api/snapshot'),
+      fetch('/api/history?limit=100').catch(() => null),
+    ]);
+
+    if (!snapshotRes.ok) {
+      throw new Error(`snapshot ${snapshotRes.status}`);
+    }
+
+    const snapshotJson = await snapshotRes.json();
+    const historyJson = historyRes && historyRes.ok ? await historyRes.json() : null;
+
+    STATE.snapshot = snapshotJson.chains || {};
+    STATE.history = historyJson && Array.isArray(historyJson.points)
+      ? historyJson.points
+      : [];
+
+    const serverTime = snapshotJson.generatedAt || new Date().toISOString();
+    STATE.lastUpdated = serverTime;
+
+    render();
+    renderHistory();
+
+    showStatus('OK');
+  } catch (err) {
+    console.error(err);
+    showStatus('Failed to fetch data', 'error');
+  }
+}
+
+// ----- Rendering -----
+function applyFilterAndSort() {
+  const q = STATE.search.trim().toLowerCase();
+  const priority = STATE.priority;
+
+  let list = CHAINS.slice();
+
+  if (q) {
+    list = list.filter(c => {
+      const t = `${c.name} ${c.ticker}`.toLowerCase();
+      return t.includes(q);
+    });
+  }
+
+  if (priority === 'fast') {
+    // 速いチェーンを上に（単純に snapshot.speedSec でソート）
+    list.sort((a, b) => {
+      const sa = STATE.snapshot?.[a.id]?.speedSec ?? Infinity;
+      const sb = STATE.snapshot?.[b.id]?.speedSec ?? Infinity;
+      return sa - sb;
+    });
+  }
+
+  return list;
+}
+
+function render() {
+  if (!TBL.tbody) return;
+
+  const snapshot = STATE.snapshot || {};
+  const rows = applyFilterAndSort();
+  const fiat = STATE.fiat;
+
+  const rowsHtml = rows.map(chain => {
+    const data = snapshot[chain.id] || {};
+    const fee = data.feeUsd;
+    const feeCell = fee == null
+      ? '<span class="mono">—</span>'
+      : `<span class="mono">${fmtFiatFromUsd(fee, fiat)}</span>`;
+
+    const speedCell = data.speedSec == null
+      ? '—'
+      : `<span class="mono">${fmtSpeed(data.speedSec)}</span>`;
+
+    const { label: statusLabel, className: statusClass } = decideStatusTag(data.speedSec);
+
+    const statusHtml = `<span class="tag ${statusClass}">${statusLabel}</span>`;
+
+    const updatedHtml = data.updatedAt
+      ? fmtTime(data.updatedAt)
+      : '—';
+
+    const hasTiers = Array.isArray(data.tiers) && data.tiers.length > 0;
+
+    const detailsCell = hasTiers
+      ? `<button type="button" class="details-btn" data-chain-id="${chain.id}">Details</button>`
+      : '<span class="muted">—</span>';
+
+    return `
+      <tr data-chain-id="${chain.id}">
+        <td>${chain.name}</td>
+        <td class="mono">${chain.ticker}</td>
+        <td class="fee">${feeCell}</td>
+        <td>${speedCell}</td>
+        <td class="col-details">${detailsCell}</td>
+        <td>${statusHtml}</td>
+        <td class="updated">${updatedHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  TBL.tbody.innerHTML = rowsHtml;
+
+  if (TBL.updated) {
+    TBL.updated.textContent = STATE.lastUpdated
+      ? fmtTime(STATE.lastUpdated)
+      : '—';
+  }
+
+  updateFeeHeader();
+  attachDetailsTooltipHandlers();
+}
+
+// フィアット切り替えヘッダ
+function updateFeeHeader() {
   if (!TBL.feeHeader) return;
-  const cur = STATE.fiat;
-  const label = cur === 'JPY' ? 'Fee (JPY)' : 'Fee (USD)';
+  const fiat = STATE.fiat;
+  const label = fiat === 'JPY' ? 'Fee (JPY)' : 'Fee (USD)';
   TBL.feeHeader.textContent = label;
 }
 
-function showErrorBanner (msg) {
-  if (!TBL.tbody) return;
-  if (document.getElementById(ERR_BANNER_ID)) return;
-
-  const card = TBL.tbody.closest('.card') || TBL.tbody.closest('article');
-  if (!card) return;
-
-  const banner = document.createElement('div');
-  banner.id = ERR_BANNER_ID;
-  banner.style.cssText =
-    'background:rgba(239,68,68,.10);color:#b00;' +
-    'border:1px solid rgba(239,68,68,.35);border-radius:10px;' +
-    'padding:8px 12px;margin:0 14px 10px;';
-  banner.textContent = msg || 'Failed to fetch data. Retrying in 30s…';
-
-  const inner = card.querySelector('.inner') || card;
-  inner.prepend(banner);
-
-  setTimeout(() => {
-    const el = document.getElementById(ERR_BANNER_ID);
-    if (el && el.parentNode) el.parentNode.removeChild(el);
-  }, 30_000);
-}
-
-// ----- Snapshot 取得 -----
-
-async function fetchAll () {
-  const res = await fetch('/api/snapshot');
-  if (!res.ok) throw new Error('Failed to fetch /api/snapshot');
-  const snapshot = await res.json();
-  STATE.snapshot = snapshot;
-
-  const rows = CHAINS.map(meta => {
-    const snap = snapshot[meta.id];
-    if (!snap) {
-      return {
-        id: meta.id,
-        chain: meta.chain,
-        ticker: meta.ticker,
-        feeUSD: null,
-        speedSec: null,
-        status: 'avg',
-        updated: '—',
-      };
-    }
-
-    const feeUSD =
-      snap.feeUSD == null || snap.feeUSD === ''
-        ? null
-        : Number(snap.feeUSD);
-
-    const speedSec =
-      snap.speedSec == null || snap.speedSec === ''
-        ? null
-        : Number(snap.speedSec);
-
-    const status   = snap.status || decideStatus(feeUSD, speedSec);
-
-    let updatedLabel = '—';
-    if (snap.updated) {
-      const d = new Date(snap.updated);
-      if (!isNaN(d.getTime())) updatedLabel = d.toLocaleTimeString();
-    }
-
-    return {
-      id: meta.id,
-      chain: meta.chain,
-      ticker: meta.ticker,
-      feeUSD,
-      speedSec,
-      status,
-      updated: updatedLabel,
-    };
-  });
-
-  return rows;
-}
-
-function getGasTiersForChain (chainId) {
-  const snapshot = STATE.snapshot;
-  if (!snapshot) return [];
-  const snap = snapshot[chainId];
-  if (!snap || !Array.isArray(snap.tiers)) return [];
-  return snap.tiers;
-}
-
-// ----- Filter -----
-
-function applyFilter () {
-  if (!TBL.tbody) return;
-  const q = (TBL.searchInput?.value || '').trim().toLowerCase();
-  const prio = TBL.prioritySelect?.value || 'standard';
-
-  const rows = STATE.rows
-    .filter(row => {
-      if (!q) return true;
-      const hay =
-        (row.chain || '') +
-        ' ' +
-        (row.ticker || '') +
-        ' ' +
-        (row.id || '');
-      return hay.toLowerCase().includes(q);
-    })
-    .map(row => ({
-      ...row,
-      _priority: prio,
-    }));
-
-  if (!rows.length) {
-    TBL.tbody.innerHTML = `
-      <tr>
-        <td colspan="7" class="mono" style="color:var(--muted)">
-          No chains matched your search.
-        </td>
-      </tr>`;
-    return;
-  }
-
-  const cur = STATE.fiat;
-  const snapshot = STATE.snapshot || {};
-
-  TBL.tbody.innerHTML = rows
-    .map(r => {
-      const feeCell =
-        r.feeUSD == null
-          ? '<span class="mono">—</span>'
-          : `<span
-               class="fee-btn mono"
-               data-fee-usd="${r.feeUSD}"
-               data-chain-id="${r.id || ''}"
-               style="cursor:pointer;"
-             >${fmtFiatFromUsd(r.feeUSD, cur)}</span>`;
-
-      const snap = snapshot[r.id];
-      const hasTiers = !!(snap && Array.isArray(snap.tiers) && snap.tiers.length);
-
-      const detailsCell = hasTiers
-        ? `<button
-               type="button"
-               class="details-btn"
-               data-chain-id="${r.id || ''}"
-               style="font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;"
-           >▼ Details</button>`
-        : '<span style="color:var(--muted);font-size:12px;">—</span>';
-
-      const statusLabel =
-        r.status === 'fast'
-          ? 'Fast'
-          : r.status === 'slow'
-          ? 'Slow'
-          : 'Avg';
-
-      return `
-        <tr data-chain-id="${r.id}">
-          <td>${r.chain}</td>
-          <td><span class="mono">${r.ticker}</span></td>
-          <td>${feeCell}</td>
-          <td><span class="mono">${fmtSpeed(r.speedSec)}</span></td>
-          <td>${detailsCell}</td>
-          <td>
-            <span class="pill pill-${r.status || 'avg'}">${statusLabel}</span>
-          </td>
-          <td><span class="mono">${r.updated}</span></td>
-        </tr>`;
-    })
-    .join('');
-
-  attachFeeTooltipHandlers();
-  attachDetailsHandlers();
-}
-
-// ----- Tooltip (Exact fee) -----
-
-let FEE_TOOLTIP_BOUND = false;
-
-function attachFeeTooltipHandlers () {
-  const tooltip = TBL.detailsTooltip;
-  if (!TBL.tbody || !tooltip || FEE_TOOLTIP_BOUND) return;
-  FEE_TOOLTIP_BOUND = true;
-
-  const hide = () => {
-    tooltip.style.display = 'none';
-  };
-
-  // fee セルクリックで正確値ポップアップ
-  TBL.tbody.addEventListener('click', e => {
-    const btn = e.target.closest('.fee-btn');
-    if (!btn) return;
-    e.stopPropagation();
-
-    const raw = btn.getAttribute('data-fee-usd');
-    const feeUsd = raw == null ? null : Number(raw);
-    if (feeUsd == null || !isFinite(feeUsd)) {
-      hide();
-      return;
-    }
-
-    const chainId = btn.getAttribute('data-chain-id') || '';
-    const snap = STATE.snapshot && STATE.snapshot[chainId];
-    const tiers = snap && Array.isArray(snap.tiers) ? snap.tiers : [];
-    const cur = STATE.fiat;
-
-    let html = `<div class="mono" style="font-size:12px;margin-bottom:4px;">Exact fee: ${fmtFiatFromUsd(feeUsd, cur)}</div>`;
-    if (tiers.length) {
-      html += '<div style="font-size:11px;">';
-      tiers.forEach(t => {
-        const label = t.label || t.tier;
-        const feeStr =
-          t.feeUSD == null ? '—' : fmtFiatFromUsd(t.feeUSD, cur);
-        html += `<div>${label}: ${feeStr}</div>`;
-      });
-      html += '</div>';
-    }
-
-    tooltip.innerHTML = html;
-
-    const rect = btn.getBoundingClientRect();
-    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-    tooltip.style.left = `${rect.left + scrollX}px`;
-    tooltip.style.top = `${rect.bottom + 6 + scrollY}px`;
-    tooltip.style.display = 'block';
-  });
-
-  // 外側クリックで閉じる
-  document.addEventListener('click', e => {
-    if (!tooltip) return;
-    if (e.target.closest('.fee-btn') || e.target.closest('#detailsTooltip')) {
-      return;
-    }
-    hide();
-  });
-}
-
-// ----- ガスティア詳細行 -----
-
-function toggleGasDetailsRow (rowEl, chainId, btnEl) {
-  const existing = rowEl.nextElementSibling;
-  if (existing && existing.classList.contains('gas-details-row')) {
-    existing.parentNode.removeChild(existing);
-    if (btnEl) btnEl.textContent = '▼ Details';
-    return;
-  }
-
-  const tiers = getGasTiersForChain(chainId);
-  if (!tiers.length) return;
-
-  const colSpan = rowEl.children.length;
-  const tr = document.createElement('tr');
-  tr.className = 'gas-details-row';
-  tr.innerHTML = `
-    <td colspan="${colSpan}">
-      <div class="mono" style="font-size:12px;color:var(--muted);padding:4px 8px;">
-        ${tiers
-          .map(t => {
-            const fee =
-              t.feeUSD == null
-                ? '—'
-                : fmtFiatFromUsd(t.feeUSD, 'USD');
-            const speed =
-              t.speedMinSec && t.speedMaxSec && t.speedMinSec !== t.speedMaxSec
-                ? `${fmtSpeed(t.speedMinSec)}–${fmtSpeed(t.speedMaxSec)}`
-                : fmtSpeed(t.speedMinSec || t.speedMaxSec);
-            return `${t.label || t.tier}: ${fee} / ${speed}`;
-          })
-          .join(' | ')}
-      </div>
-    </td>`;
-  rowEl.parentNode.insertBefore(tr, rowEl.nextSibling);
-  if (btnEl) btnEl.textContent = '▲ Details';
-}
-
-let DETAILS_BOUND = false;
-
-function attachDetailsHandlers () {
-  if (!TBL.tbody || DETAILS_BOUND) return;
-  DETAILS_BOUND = true;
-
-  TBL.tbody.addEventListener('click', e => {
-    const btn = e.target.closest('.details-btn');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const row = btn.closest('tr');
-    if (!row) return;
-    const chainId =
-      btn.getAttribute('data-chain-id') ||
-      row.getAttribute('data-chain-id') ||
-      '';
-    if (!chainId) return;
-
-    toggleGasDetailsRow(row, chainId, btn);
-  });
-}
-
-// ----- 履歴取得 -----
-
-async function fetchHistory () {
-  if (!TBL.historyCanvas) return;
-
-  const url = `/api/history?limit=100&chain=${encodeURIComponent(
-    STATE.historyChain
-  )}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch /api/history');
-  const data = await res.json();
-  STATE.history = Array.isArray(data) ? data : [];
-  drawHistory();
-}
-
-function drawHistory () {
+// ----- History chart -----
+function renderHistory() {
   const canvas = TBL.historyCanvas;
-  if (!canvas) return;
+  const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
+  if (!canvas || !ctx) return;
 
-  const ctx = canvas.getContext('2d');
-  const rows = STATE.history;
-  if (!rows.length) {
-    // データ無しなら何も描かず空のカードにする
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const chainId = TBL.historyChain ? TBL.historyChain.value : 'btc';
+  const points = STATE.history.filter(p => p.chainId === chainId);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!points.length) {
+    if (TBL.historyEmpty) {
+      TBL.historyEmpty.classList.remove('hidden');
+    }
     return;
   }
+  if (TBL.historyEmpty) {
+    TBL.historyEmpty.classList.add('hidden');
+  }
 
-  const w = canvas.width;
-  const h = canvas.height;
-  const paddingX = 24;
-  const paddingY = 12;
-  const innerW = w - paddingX * 2;
-  const innerH = h - paddingY * 2;
+  // canvas サイズ
+  const width = canvas.clientWidth || 600;
+  const height = canvas.clientHeight || 140;
+  canvas.width = width;
+  canvas.height = height;
 
-  const fees = rows.map(r => Number(r.feeUSD) || 0);
-  const minFee = Math.min(...fees);
-  const maxFee = Math.max(...fees);
-  const span = maxFee - minFee || 1;
+  const xs = points.map(p => p.ts);
+  const ys = points.map(p => p.feeUsd);
 
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle =
-    getComputedStyle(document.documentElement)
-      .getPropertyValue('--surface-alt') || '#f9fafb';
-  ctx.fillRect(0, 0, w, h);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
 
-  ctx.strokeStyle = '#e5e7eb';
-  ctx.lineWidth = 1;
+  const pad = 10;
+  const rangeX = maxX - minX || 1;
+  const rangeY = maxY - minY || 1;
+
+  function toX(ts) {
+    return pad + ((ts - minX) / rangeX) * (width - pad * 2);
+  }
+  function toY(v) {
+    const ratio = (v - minY) / rangeY;
+    return height - pad - ratio * (height - pad * 2);
+  }
+
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#10B981';
   ctx.beginPath();
-  ctx.moveTo(paddingX, paddingY + innerH / 2);
-  ctx.lineTo(paddingX + innerW, paddingY + innerH / 2);
-  ctx.stroke();
-
-  const n = rows.length;
-  const dx = n > 1 ? innerW / (n - 1) : 0;
-
-  ctx.beginPath();
-  rows.forEach((row, i) => {
-    const x = paddingX + dx * i;
-    const y =
-      paddingY +
-      innerH -
-      ((Number(row.feeUSD) || 0) - minFee) * (innerH / span);
+  points.forEach((p, i) => {
+    const x = toX(p.ts);
+    const y = toY(p.feeUsd);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = '#10b981';
-  ctx.lineWidth = 2;
   ctx.stroke();
 }
 
-// ----- イベント -----
+// ----- Details tooltip (Exact fee + tiers) -----
+let DETAILS_TOOLTIP_BOUND = false;
 
-function setupEventHandlers () {
-  if (TBL.currencySelect) {
-    TBL.currencySelect.addEventListener('change', () => {
-      STATE.fiat = TBL.currencySelect.value || 'USD';
-      updateFeeHeader();
-      applyFilter();
-      drawHistory();
+function attachDetailsTooltipHandlers() {
+  if (DETAILS_TOOLTIP_BOUND || !TBL.tbody || !DETAILS_TOOLTIP) return;
+  DETAILS_TOOLTIP_BOUND = true;
+
+  // テーブル内クリック
+  TBL.tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.details-btn');
+    if (!btn) return;
+
+    const chainId = btn.dataset.chainId;
+    const data = STATE.snapshot && STATE.snapshot[chainId];
+    if (!data) return;
+
+    const fiat = STATE.fiat;
+    const feeUsd = data.feeUsd;
+    if (feeUsd == null || !Number.isFinite(feeUsd)) return;
+
+    const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+
+    let html = '';
+    html += `<div class="mono strong">Exact fee: ${fmtFiatFromUsd(feeUsd, fiat)}</div>`;
+
+    tiers.forEach(t => {
+      const tierFee = t.feeUsd != null ? t.feeUsd : feeUsd;
+      html += `<div class="mono">${t.label || t.name || ''}: ${fmtFiatFromUsd(tierFee, fiat)}</div>`;
     });
-  }
 
-  if (TBL.searchInput) {
-    TBL.searchInput.addEventListener('input', () => {
-      applyFilter();
-    });
-  }
+    DETAILS_TOOLTIP.innerHTML = html;
 
-  if (TBL.prioritySelect) {
-    TBL.prioritySelect.addEventListener('change', () => {
-      applyFilter();
-    });
-  }
+    // 位置調整：Details ボタンのすぐ下
+    const rect = btn.getBoundingClientRect();
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const scrollX = window.scrollX || document.documentElement.scrollLeft;
 
-  if (TBL.refreshBtn) {
-    TBL.refreshBtn.addEventListener('click', () => {
-      refreshOnce({ showGlow: true }).catch(() => {});
-    });
-  }
+    DETAILS_TOOLTIP.style.position = 'absolute';
+    DETAILS_TOOLTIP.style.left = `${rect.left + scrollX}px`;
+    DETAILS_TOOLTIP.style.top = `${rect.bottom + 8 + scrollY}px`;
+    DETAILS_TOOLTIP.classList.remove('hidden');
+  });
 
-  if (TBL.historySelect) {
-    TBL.historySelect.addEventListener('change', () => {
-      STATE.historyChain = TBL.historySelect.value || 'bitcoin';
-      fetchHistory().catch(() => {});
-    });
-  }
-}
-
-// ----- 行ハイライト -----
-
-function glowRows () {
-  const rows = TBL.tbody ? TBL.tbody.querySelectorAll('tr') : [];
-  rows.forEach(row => {
-    row.classList.add('glow-once');
-    setTimeout(() => row.classList.remove('glow-once'), 600);
+  // テーブル外クリックで閉じる
+  document.addEventListener('click', (e) => {
+    if (!DETAILS_TOOLTIP) return;
+    if (e.target.closest('.details-btn') || e.target.closest('#detailsTooltip')) {
+      return;
+    }
+    DETAILS_TOOLTIP.classList.add('hidden');
   });
 }
 
-// ----- リフレッシュ -----
+// ----- Event bindings -----
+function bindUI() {
+  if (TBL.q) {
+    TBL.q.addEventListener('input', (e) => {
+      STATE.search = e.target.value || '';
+      render();
+    });
+  }
 
-async function refreshOnce ({ showGlow = true } = {}) {
-  try {
-    if (TBL.refreshBtn) TBL.refreshBtn.disabled = true;
+  if (TBL.priority) {
+    TBL.priority.addEventListener('change', (e) => {
+      STATE.priority = e.target.value || 'standard';
+      render();
+    });
+  }
 
-    const rows = await fetchAll();
-    STATE.rows = rows;
-    applyFilter();
+  if (TBL.fiat) {
+    TBL.fiat.addEventListener('change', (e) => {
+      STATE.fiat = e.target.value || 'USD';
+      render();
+    });
+  }
 
-    fetchHistory().catch(() => {});
+  const refreshBtn = document.getElementById('refreshBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      fetchAll();
+    });
+  }
 
-    setStatus('Updated ' + nowTime());
-    if (showGlow) glowRows();
-  } catch (err) {
-    console.error(err);
-    STATE.lastError = err;
-    showErrorBanner('Failed to fetch data. Retrying in 30s…');
-  } finally {
-    if (TBL.refreshBtn) TBL.refreshBtn.disabled = false;
+  if (TBL.historyChain) {
+    TBL.historyChain.addEventListener('change', () => {
+      renderHistory();
+    });
   }
 }
 
-// ----- Boot -----
+// ----- Auto refresh -----
+function startAutoRefresh() {
+  if (AUTO_REFRESH_TIMER) clearInterval(AUTO_REFRESH_TIMER);
+  AUTO_REFRESH_TIMER = setInterval(fetchAll, 60_000);
+}
 
-(function boot () {
-  // 初期フィアットをセレクトボックスから拾う
-  if (TBL.currencySelect && TBL.currencySelect.value) {
-    STATE.fiat = TBL.currencySelect.value;
-  }
-  updateFeeHeader();
-
-  setStatus('Updated —');
-  setupEventHandlers();
-  refreshOnce({ showGlow: false });
-  clearInterval(STATE.timer);
-  STATE.timer = setInterval(
-    () => refreshOnce({ showGlow: true }),
-    STATE.intervalMs
-  );
-})();
+// ----- Init -----
+document.addEventListener('DOMContentLoaded', () => {
+  bindUI();
+  fetchAll();
+  startAutoRefresh();
+});
