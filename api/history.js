@@ -20,14 +20,17 @@ export default function handler(req, res) {
   const historyByChain = {
     btc: [],
     eth: [],
+    sol: [],
     arb: [],
     op: [],
-    sol: [],
+    base: [],
+    polygon: [],
+    bsc: [],
   };
 
   res.status(200).json({
     ok: true,
     generatedAt: now,
-    history: historyByChain,
+    chains: historyByChain,
   });
 }

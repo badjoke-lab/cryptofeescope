@@ -312,6 +312,7 @@ tbody tr:hover{
 footer{
   color:var(--muted);
   border-top:1px solid var(--line);
+  flex-shrink:0;
 }
 footer .inner{
   max-width:1100px;
