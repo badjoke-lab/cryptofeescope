@@ -57,13 +57,15 @@ function baseFailedChain(nowIso, errorMessage = "") {
   };
 }
 
-async function safeBuild(builder) {
+// ---------- safeBuild（★修正版） ----------
+async function safeBuild(builder, generatedAt) {
   try {
     const result = await builder();
     return { ok: true, ...result };
   } catch (e) {
     console.error("[snapshot] chain failed:", e.message);
-    return baseFailedChain(new Date().toISOString(), e.message || "error");
+    const ts = generatedAt || new Date().toISOString();
+    return baseFailedChain(ts, e.message || "error");
   }
 }
 
@@ -134,16 +136,14 @@ async function buildBitcoin(prices) {
     };
   });
 
-  const main = tiers.find(t => t.label === "standard") || tiers[0] || null;
+  const main = tiers.find(t => t.label === "standard") || tiers[0];
   const now = new Date().toISOString();
-  const feeUSD = main ? main.feeUSD : null;
-  const speedSec = main ? main.speedSec : null;
 
   return {
-    feeUSD,
-    feeJPY: calcJpy(feeUSD, usdToJpy),
-    speedSec,
-    status: decideStatus(feeUSD, speedSec),
+    feeUSD: main.feeUSD,
+    feeJPY: main.feeJPY,
+    speedSec: main.speedSec,
+    status: decideStatus(main.feeUSD, main.speedSec),
     updated: now,
     tiers,
   };
@@ -196,10 +196,11 @@ async function buildEtherscanGasChain(priceObj, url) {
     mkTier("slow", r.SafeGasPrice, 300),
   ];
 
-  const main = tiers[0] || null;
+  // ★ main tier を standard に変更
+  const main = tiers.find(t => t.label === "standard") || tiers[0];
   const now = new Date().toISOString();
-  const feeUSD = main ? main.feeUSD : null;
-  const speedSec = main ? main.speedSec : null;
+  const feeUSD = main.feeUSD;
+  const speedSec = main.speedSec;
 
   return {
     feeUSD,
@@ -243,7 +244,7 @@ async function buildSolana(prices) {
   };
 }
 
-// ---------- ARB (L2) ----------
+// ---------- ARB ----------
 async function buildArbitrum(prices) {
   const price = prices.ETH;
   const priceUsd = Number(price.usd);
@@ -303,13 +304,14 @@ async function buildArbitrum(prices) {
   };
 }
 
-// ---------- OP (L2) ----------
+// ---------- OP ----------
 async function buildOptimism(prices) {
   const price = prices.ETH;
   const priceUsd = Number(price.usd);
   if (!priceUsd) throw new Error("No ETH price for Optimism");
 
   const usdToJpy = calcUsdToJpyRate(price);
+
   const body = JSON.stringify({
     jsonrpc: "2.0",
     id: 1,
@@ -363,7 +365,7 @@ async function buildOptimism(prices) {
   };
 }
 
-// ---------- Base (L2) ----------
+// ---------- Base ----------
 async function buildBase(prices) {
   const params = new URLSearchParams({
     module: "gastracker",
@@ -393,7 +395,7 @@ async function buildBsc(prices) {
   return buildEtherscanGasChain(prices.BNB, `https://api.bscscan.com/api?${params.toString()}`);
 }
 
-// ---------- ハンドラ ----------
+// ---------- ハンドラ（★chains に generatedAt を渡す） ----------
 module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
@@ -407,19 +409,20 @@ module.exports = async function (req, res) {
     const prices = await getPrices();
 
     const chains = {
-      btc: await safeBuild(() => buildBitcoin(prices)),
-      eth: await safeBuild(() => buildEthereum(prices)),
-      sol: await safeBuild(() => buildSolana(prices)),
-      arb: await safeBuild(() => buildArbitrum(prices)),
-      op: await safeBuild(() => buildOptimism(prices)),
-      base: await safeBuild(() => buildBase(prices)),
-      polygon: await safeBuild(() => buildPolygon(prices)),
-      bsc: await safeBuild(() => buildBsc(prices)),
+      btc: await safeBuild(() => buildBitcoin(prices), generatedAt),
+      eth: await safeBuild(() => buildEthereum(prices), generatedAt),
+      sol: await safeBuild(() => buildSolana(prices), generatedAt),
+      arb: await safeBuild(() => buildArbitrum(prices), generatedAt),
+      op: await safeBuild(() => buildOptimism(prices), generatedAt),
+      base: await safeBuild(() => buildBase(prices), generatedAt),
+      polygon: await safeBuild(() => buildPolygon(prices), generatedAt),
+      bsc: await safeBuild(() => buildBsc(prices), generatedAt),
     };
 
     return res.status(200).json({ generatedAt, chains });
   } catch (e) {
     console.error("[snapshot] fatal error:", e);
+
     const failedChains = {
       btc: baseFailedChain(generatedAt, e.message || "error"),
       eth: baseFailedChain(generatedAt, e.message || "error"),
@@ -430,6 +433,7 @@ module.exports = async function (req, res) {
       polygon: baseFailedChain(generatedAt, e.message || "error"),
       bsc: baseFailedChain(generatedAt, e.message || "error"),
     };
+
     return res.status(200).json({ generatedAt, chains: failedChains });
   }
 };
