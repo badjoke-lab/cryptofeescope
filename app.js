@@ -6,37 +6,35 @@ const THEME_KEY = 'cfs-theme';
 function getInitialTheme() {
   const stored = localStorage.getItem(THEME_KEY);
   if (stored === 'dark' || stored === 'light') return stored;
-  return window.matchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
     : 'light';
 }
 
 function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem(THEME_KEY, theme);
+  const t = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.body.classList.toggle('dark', t === 'dark');
+  localStorage.setItem(THEME_KEY, t);
 }
 
-// 初期テーマ適用
-applyTheme(getInitialTheme());
+// 初期テーマ適用は DOMContentLoaded 内で行う
 
 // ----- DOM refs -----
 const TBL = {
-  status: document.getElementById('statusText'),
-  updated: document.getElementById('updatedText'),
-  q: document.getElementById('searchInput'),
-  priority: document.getElementById('prioritySelect'),
-  fiat: document.getElementById('fiatSelect'),
-  tbody: document.getElementById('mainTbody'),
-  historyCard: document.getElementById('historyCard'),
-  historyTitle: document.getElementById('historyTitle'),
-  historyEmpty: document.getElementById('historyEmpty'),
+  status: document.getElementById('status'),
+  q: document.getElementById('q'),
+  priority: document.getElementById('priority'),
+  fiat: document.getElementById('fiat'),
+  tbody: document.getElementById('tbody'),
   historyCanvas: document.getElementById('historyCanvas'),
-  historyChain: document.getElementById('historyChainSelect'),
+  historyChain: document.getElementById('historyChain'),
   feeHeader: document.getElementById('feeHeader'),
 };
 
 const DETAILS_TOOLTIP = document.getElementById('detailsTooltip');
+const REFRESH_BTN = document.getElementById('refreshBtn');
+const THEME_BTN = document.getElementById('themeBtn');
 
 // ----- Config -----
 const FIAT_CONFIG = {
@@ -48,29 +46,17 @@ const FIAT_CONFIG = {
 const CHAINS = [
   { id: 'btc', name: 'Bitcoin (L1)', ticker: 'BTC', family: 'bitcoin' },
   { id: 'eth', name: 'Ethereum (L1)', ticker: 'ETH', family: 'evm' },
+  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
   { id: 'arb', name: 'Arbitrum (L2 on ETH)', ticker: 'ARB', family: 'evm' },
   { id: 'op',  name: 'Optimism (L2 on ETH)', ticker: 'OP',  family: 'evm' },
-  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
-  { id: 'matic', name: 'Polygon (L2 / sidechain)', ticker: 'MATIC', family: 'evm' },
-  { id: 'bnb', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
-  { id: 'avax', name: 'Avalanche C-Chain', ticker: 'AVAX', family: 'evm' },
-  { id: 'trx', name: 'Tron', ticker: 'TRX', family: 'tron' },
-  { id: 'xrp', name: 'XRP Ledger', ticker: 'XRP', family: 'xrp' },
-  { id: 'ltc', name: 'Litecoin', ticker: 'LTC', family: 'utxo' },
-  { id: 'doge', name: 'Dogecoin', ticker: 'DOGE', family: 'utxo' },
-  { id: 'ada', name: 'Cardano', ticker: 'ADA', family: 'cardano' },
-  { id: 'ton', name: 'TON', ticker: 'TON', family: 'ton' },
   { id: 'base', name: 'Base (L2 on ETH)', ticker: 'BASE', family: 'evm' },
-  { id: 'scr', name: 'Scroll (L2 on ETH)', ticker: 'SCR', family: 'evm' },
-  { id: 'zks', name: 'zkSync Era', ticker: 'ZKS', family: 'evm' },
-  { id: 'linea', name: 'Linea', ticker: 'LINEA', family: 'evm' },
-  { id: 'mnt', name: 'Mantle', ticker: 'MNT', family: 'evm' },
-  { id: 'sei', name: 'Sei', ticker: 'SEI', family: 'sei' }
+  { id: 'polygon', name: 'Polygon', ticker: 'MATIC', family: 'evm' },
+  { id: 'bsc', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
 ];
 
 const STATE = {
-  snapshot: null,      // { [id]: { feeUsd, feeJpy, speedSec, status, updatedAt, tiers, ... } }
-  history: [],         // [{ chainId, ts, feeUsd }]
+  snapshot: null,      // { [id]: { feeUSD, feeJPY, speedSec, status, updated, tiers } }
+  history: {},         // { [chainId]: [{ ts, feeUSD }] }
   fiat: 'USD',
   priority: 'standard',
   search: '',
@@ -103,23 +89,53 @@ function fmtSpeed(sec) {
   return `${m.toFixed(1)} min`;
 }
 
-function fmtFiatFromUsd(feeUsd, fiat) {
-  if (feeUsd == null || !Number.isFinite(feeUsd)) return '—';
-  const cfg = FIAT_CONFIG[fiat] || FIAT_CONFIG.USD;
-  if (fiat === 'USD') {
-    if (feeUsd < 0.001) return '< $0.001';
-    return `${cfg.symbol}${feeUsd.toFixed(3)}`;
+function fmtTierSpeed(sec, preferMinutes = false) {
+  if (sec == null || !Number.isFinite(sec)) return '—';
+  if (preferMinutes) {
+    const m = Math.max(1, Math.round(sec / 60));
+    return `${m} min`;
   }
-  // JPY 想定：snapshot 側ですでに fiat 変換済みならその値を使う
-  const value = feeUsd;
+  const s = Math.max(1, Math.round(sec));
+  return `${s} sec`;
+}
+
+function fmtFiat(feeUsd, feeJpy, fiat) {
+  const cfg = FIAT_CONFIG[fiat] || FIAT_CONFIG.USD;
+  const value = fiat === 'JPY'
+    ? (Number.isFinite(feeJpy) ? feeJpy : feeUsd)
+    : feeUsd;
+
+  if (value == null || !Number.isFinite(value)) return '—';
+
+  if (fiat === 'USD') {
+    if (value < 0.001) return '< $0.001';
+    return `${cfg.symbol}${value.toFixed(3)}`;
+  }
+
   return `${cfg.symbol}${value.toFixed(2)}`;
 }
 
-function decideStatusTag(sec) {
+function decideStatusTag(sec, status) {
+  if (status === 'failed') return { label: 'Failed', className: 'bad' };
+  if (status === 'fast') return { label: 'Fast', className: 'good' };
+  if (status === 'slow') return { label: 'Slow', className: 'warn' };
+  if (status === 'avg') return { label: 'Avg', className: '' };
   if (sec == null || !Number.isFinite(sec)) return { label: 'Avg', className: '' };
   if (sec <= 60) return { label: 'Fast', className: 'good' };
   if (sec <= 600) return { label: 'Avg', className: '' };
   return { label: 'Slow', className: 'warn' };
+}
+
+function applyRowGlow() {
+  if (!TBL.tbody) return;
+  const rows = Array.from(TBL.tbody.querySelectorAll('tr'));
+  rows.forEach(r => {
+    r.classList.add('rowglow');
+    r.classList.add('on');
+  });
+  setTimeout(() => {
+    rows.forEach(r => r.classList.remove('on'));
+  }, 600);
 }
 
 // ----- API -----
@@ -140,9 +156,7 @@ async function fetchAll() {
     const historyJson = historyRes && historyRes.ok ? await historyRes.json() : null;
 
     STATE.snapshot = snapshotJson.chains || {};
-    STATE.history = historyJson && Array.isArray(historyJson.points)
-      ? historyJson.points
-      : [];
+    STATE.history = historyJson && historyJson.chains ? historyJson.chains : {};
 
     const serverTime = snapshotJson.generatedAt || new Date().toISOString();
     STATE.lastUpdated = serverTime;
@@ -150,7 +164,8 @@ async function fetchAll() {
     render();
     renderHistory();
 
-    showStatus('OK');
+    applyRowGlow();
+    showStatus(`Updated ${fmtTime(serverTime)}`);
   } catch (err) {
     console.error(err);
     showStatus('Failed to fetch data', 'error');
@@ -192,24 +207,24 @@ function render() {
 
   const rowsHtml = rows.map(chain => {
     const data = snapshot[chain.id] || {};
-    const fee = data.feeUsd;
+    const fee = data.feeUSD;
     const feeCell = fee == null
       ? '<span class="mono">—</span>'
-      : `<span class="mono">${fmtFiatFromUsd(fee, fiat)}</span>`;
+      : `<span class="mono">${fmtFiat(fee, data.feeJPY, fiat)}</span>`;
 
     const speedCell = data.speedSec == null
       ? '—'
       : `<span class="mono">${fmtSpeed(data.speedSec)}</span>`;
 
-    const { label: statusLabel, className: statusClass } = decideStatusTag(data.speedSec);
+    const { label: statusLabel, className: statusClass } = decideStatusTag(data.speedSec, data.status);
 
     const statusHtml = `<span class="tag ${statusClass}">${statusLabel}</span>`;
 
-    const updatedHtml = data.updatedAt
-      ? fmtTime(data.updatedAt)
+    const updatedHtml = data.updated
+      ? fmtTime(data.updated)
       : '—';
 
-    const hasTiers = Array.isArray(data.tiers) && data.tiers.length > 0;
+    const hasTiers = data.ok !== false && data.feeUSD != null && Array.isArray(data.tiers) && data.tiers.length > 0;
 
     const detailsCell = hasTiers
       ? `<button type="button" class="details-btn" data-chain-id="${chain.id}">Details</button>`
@@ -230,12 +245,6 @@ function render() {
 
   TBL.tbody.innerHTML = rowsHtml;
 
-  if (TBL.updated) {
-    TBL.updated.textContent = STATE.lastUpdated
-      ? fmtTime(STATE.lastUpdated)
-      : '—';
-  }
-
   updateFeeHeader();
   attachDetailsTooltipHandlers();
 }
@@ -255,18 +264,12 @@ function renderHistory() {
   if (!canvas || !ctx) return;
 
   const chainId = TBL.historyChain ? TBL.historyChain.value : 'btc';
-  const points = STATE.history.filter(p => p.chainId === chainId);
+  const points = Array.isArray(STATE.history?.[chainId]) ? STATE.history[chainId] : [];
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (!points.length) {
-    if (TBL.historyEmpty) {
-      TBL.historyEmpty.classList.remove('hidden');
-    }
     return;
-  }
-  if (TBL.historyEmpty) {
-    TBL.historyEmpty.classList.add('hidden');
   }
 
   // canvas サイズ
@@ -275,8 +278,8 @@ function renderHistory() {
   canvas.width = width;
   canvas.height = height;
 
-  const xs = points.map(p => p.ts);
-  const ys = points.map(p => p.feeUsd);
+  const xs = points.map(p => new Date(p.ts).getTime());
+  const ys = points.map(p => p.feeUSD);
 
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
@@ -299,8 +302,8 @@ function renderHistory() {
   ctx.strokeStyle = '#10B981';
   ctx.beginPath();
   points.forEach((p, i) => {
-    const x = toX(p.ts);
-    const y = toY(p.feeUsd);
+    const x = toX(new Date(p.ts).getTime());
+    const y = toY(p.feeUSD);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -324,20 +327,37 @@ function attachDetailsTooltipHandlers() {
     if (!data) return;
 
     const fiat = STATE.fiat;
-    const feeUsd = data.feeUsd;
+    const feeUsd = data.feeUSD;
+    const feeJpy = data.feeJPY;
     if (feeUsd == null || !Number.isFinite(feeUsd)) return;
 
     const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+    const tierMap = {
+      fast: tiers.find(t => t.label === 'fast'),
+      standard: tiers.find(t => t.label === 'standard'),
+      slow: tiers.find(t => t.label === 'slow'),
+    };
 
-    let html = '';
-    html += `<div class="mono strong">Exact fee: ${fmtFiatFromUsd(feeUsd, fiat)}</div>`;
+    const htmlParts = [];
+    htmlParts.push(`<div class="mono strong">Exact fee: ${fmtFiat(feeUsd, feeJpy, fiat)}</div>`);
 
-    tiers.forEach(t => {
-      const tierFee = t.feeUsd != null ? t.feeUsd : feeUsd;
-      html += `<div class="mono">${t.label || t.name || ''}: ${fmtFiatFromUsd(tierFee, fiat)}</div>`;
-    });
+    const fastFee = tierMap.fast?.feeUSD ?? feeUsd;
+    const standardFee = tierMap.standard?.feeUSD ?? feeUsd;
+    const slowFee = tierMap.slow?.feeUSD ?? feeUsd;
 
-    DETAILS_TOOLTIP.innerHTML = html;
+    const fastJpy = tierMap.fast?.feeJPY ?? feeJpy;
+    const standardJpy = tierMap.standard?.feeJPY ?? feeJpy;
+    const slowJpy = tierMap.slow?.feeJPY ?? feeJpy;
+
+    const fastSpeed = tierMap.fast?.speedSec ?? data.speedSec;
+    const standardSpeed = tierMap.standard?.speedSec ?? data.speedSec;
+    const slowSpeed = tierMap.slow?.speedSec ?? (standardSpeed != null ? standardSpeed * 2 : null);
+
+    htmlParts.push(`<div class="mono">Fast (~${fmtTierSpeed(fastSpeed)}): ${fmtFiat(fastFee, fastJpy, fiat)}</div>`);
+    htmlParts.push(`<div class="mono">Normal (~${fmtTierSpeed(standardSpeed)}): ${fmtFiat(standardFee, standardJpy, fiat)}</div>`);
+    htmlParts.push(`<div class="mono">Slow (~${fmtTierSpeed(slowSpeed, true)}): ${fmtFiat(slowFee, slowJpy, fiat)}</div>`);
+
+    DETAILS_TOOLTIP.innerHTML = htmlParts.join('');
 
     // 位置調整：Details ボタンのすぐ下
     const rect = btn.getBoundingClientRect();
@@ -347,6 +367,7 @@ function attachDetailsTooltipHandlers() {
     DETAILS_TOOLTIP.style.position = 'absolute';
     DETAILS_TOOLTIP.style.left = `${rect.left + scrollX}px`;
     DETAILS_TOOLTIP.style.top = `${rect.bottom + 8 + scrollY}px`;
+    DETAILS_TOOLTIP.style.display = 'block';
     DETAILS_TOOLTIP.classList.remove('hidden');
   });
 
@@ -356,6 +377,7 @@ function attachDetailsTooltipHandlers() {
     if (e.target.closest('.details-btn') || e.target.closest('#detailsTooltip')) {
       return;
     }
+    DETAILS_TOOLTIP.style.display = 'none';
     DETAILS_TOOLTIP.classList.add('hidden');
   });
 }
@@ -383,10 +405,16 @@ function bindUI() {
     });
   }
 
-  const refreshBtn = document.getElementById('refreshBtn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
+  if (REFRESH_BTN) {
+    REFRESH_BTN.addEventListener('click', () => {
       fetchAll();
+    });
+  }
+
+  if (THEME_BTN) {
+    THEME_BTN.addEventListener('click', () => {
+      const current = document.body.classList.contains('dark') ? 'dark' : 'light';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
     });
   }
 
@@ -405,6 +433,7 @@ function startAutoRefresh() {
 
 // ----- Init -----
 document.addEventListener('DOMContentLoaded', () => {
+  applyTheme(getInitialTheme());
   bindUI();
   fetchAll();
   startAutoRefresh();

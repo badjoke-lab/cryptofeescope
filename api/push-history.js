@@ -29,13 +29,13 @@ export default async function handler(req, res) {
     }
 
     const snapshot = await snapshotResp.json();
-    // snapshot は { bitcoin: {...}, ethereum: {...}, ... } の形式を想定
+    const chains = snapshot && snapshot.chains ? snapshot.chains : {};
 
     const nowIso = new Date().toISOString();
 
     // 2. 各チェーンごとに 1 行ずつ history に INSERT
     const rows = [];
-    for (const [chain, data] of Object.entries(snapshot)) {
+    for (const [chain, data] of Object.entries(chains)) {
       rows.push({
         ts: nowIso,
         chain,
