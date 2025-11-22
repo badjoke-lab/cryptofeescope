@@ -1,17 +1,18 @@
 // api/snapshot.js
-// CryptoFeeScope snapshot API (3 chains: BTC, ETH, SOL)
-// - BTC: mempool.space recommended fees
-// - ETH: Etherscan V2 Gas Oracle (Multichain API)
-// - SOL: fixed lamports-per-signature estimate
-// NOTE: other chains are removed by design to reduce noise & rate limits.
+// CryptoFeeScope snapshot API (BTC / ETH / SOL) - CommonJS
+// Etherscan V2 official format + rate-limit retry + low-gwei sanity check
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
-
-// Etherscan V2 Multichain base
-const ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
-// ---------- 共通 ----------
+const BTC_TX_VBYTES = 140;   // standard p2wpkh send estimate
+const ETH_GAS_LIMIT = 21000; // simple ETH transfer
+const SOL_LAMPORTS_PER_SIGNATURE = 5000; // typical 1 sig tx
+
+// -------------------- common --------------------
+
+async function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -64,8 +65,6 @@ function baseFailedChain(nowIso, errorMessage = "") {
   };
 }
 
-let LAST_PRICES = null;
-
 async function safeBuild(builder, generatedAt) {
   try {
     const result = await builder();
@@ -76,7 +75,10 @@ async function safeBuild(builder, generatedAt) {
   }
 }
 
-// ---------- 価格（USD/JPY） ----------
+// -------------------- prices (BTC/ETH/SOL only) --------------------
+
+let LAST_PRICES = null;
+
 async function getPrices() {
   const ids = ["bitcoin", "ethereum", "solana"];
 
@@ -101,27 +103,19 @@ async function getPrices() {
     return LAST_PRICES;
   } catch (e) {
     console.error("[snapshot] price fetch failed:", e.message);
-    return (
-      LAST_PRICES || {
-        BTC: {},
-        ETH: {},
-        SOL: {},
-      }
-    );
+    return LAST_PRICES || { BTC:{}, ETH:{}, SOL:{} };
   }
 }
 
-// ---------- BTC ----------
+// -------------------- BTC --------------------
+
 async function buildBitcoin(prices) {
   const price = prices.BTC;
   const priceUsd = Number(price.usd);
   if (!priceUsd) throw new Error("No BTC price");
 
   const usdToJpy = calcUsdToJpyRate(price);
-
-  // mempool recommended fee rates (sat/vB)
   const data = await fetchJson("https://mempool.space/api/v1/fees/recommended");
-  const TX_VBYTES = 140;
 
   const tiersSrc = [
     { label: "standard", feeRate: data.halfHourFee, speedSec: 30 * 60 },
@@ -130,7 +124,7 @@ async function buildBitcoin(prices) {
   ];
 
   const tiers = tiersSrc.map(t => {
-    const feeBtc = (t.feeRate * TX_VBYTES) / 1e8;
+    const feeBtc = (t.feeRate * BTC_TX_VBYTES) / 1e8;
     const feeUSD = feeBtc * priceUsd;
     return {
       label: t.label,
@@ -142,7 +136,6 @@ async function buildBitcoin(prices) {
 
   const main = tiers.find(t => t.label === "standard") || tiers[0] || null;
   const now = new Date().toISOString();
-
   const feeUSD = main ? main.feeUSD : null;
   const speedSec = main ? main.speedSec : null;
 
@@ -156,51 +149,75 @@ async function buildBitcoin(prices) {
   };
 }
 
-// ---------- ETH (Etherscan V2 Gas Oracle) ----------
-async function buildEthereum(prices) {
-  const priceObj = prices.ETH;
-  const priceUsd = Number(priceObj?.usd);
-  const usdToJpy = calcUsdToJpyRate(priceObj);
-  const hasPrice = Number.isFinite(priceUsd) && priceUsd > 0;
-  if (!hasPrice) throw new Error("No ETH price");
+// -------------------- ETH (Etherscan V2 gasoracle) --------------------
+
+async function fetchEtherscanGasOracleV2() {
+  if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
 
   const params = new URLSearchParams({
     chainid: "1",
     module: "gastracker",
     action: "gasoracle",
+    apikey: ETHERSCAN_API_KEY,
   });
-  if (ETHERSCAN_API_KEY) params.set("apikey", ETHERSCAN_API_KEY);
 
-  const url = `${ETHERSCAN_V2_BASE}?${params.toString()}`;
-  const data = await fetchJson(url);
+  const url = `https://api.etherscan.io/v2/api?${params.toString()}`;
 
-  // V2 still returns { status, message, result } in most cases
-  const r = data.result || {};
-  if (data.status === "0" || data.message === "NOTOK") {
-    throw new Error(`Gas oracle failed: ${data.message || data.result || "status 0"}`);
+  // rate-limit safe retry (max 3)
+  let lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const data = await fetchJson(url);
+      if (data?.status === "0" || data?.message === "NOTOK") {
+        throw new Error(`Etherscan NOTOK: ${data?.result || data?.message}`);
+      }
+      if (!data?.result) throw new Error("Missing result from Etherscan gasoracle");
+      return data.result;
+    } catch (e) {
+      lastErr = e;
+      const backoff = 300 * Math.pow(2, i); // 300ms, 600ms, 1200ms
+      await sleep(backoff);
+    }
   }
+  throw lastErr || new Error("Etherscan gasoracle failed");
+}
+
+async function buildEthereum(prices) {
+  const price = prices.ETH;
+  const priceUsd = Number(price.usd);
+  if (!priceUsd) throw new Error("No ETH price");
+
+  const usdToJpy = calcUsdToJpyRate(price);
+  const r = await fetchEtherscanGasOracleV2();
 
   const propose = r.ProposeGasPrice ?? r.proposeGasPrice;
   const fast = r.FastGasPrice ?? r.fastGasPrice;
   const safe = r.SafeGasPrice ?? r.safeGasPrice;
 
-  if (propose === undefined && fast === undefined && safe === undefined) {
-    throw new Error("Missing gas price fields from Etherscan V2");
+  if (propose == null && fast == null && safe == null) {
+    throw new Error("Missing gas fields from Etherscan");
   }
-
-  const GAS_LIMIT = 21000;
 
   function mkTier(label, gwei, speedSec) {
     const g = Number(gwei);
     if (!Number.isFinite(g)) return { label, feeUSD: null, feeJPY: null, speedSec };
-    const gasPriceEth = g * 1e-9;        // gwei -> ETH per gas
-    const feeEth = gasPriceEth * GAS_LIMIT;
+
+    // sanity check: mainnet gas < 1 gwei is almost certainly broken feed
+    if (g < 1) {
+      throw new Error(`Unrealistic gas price (${g} gwei) from Etherscan`);
+    }
+
+    const gasPriceEth = g * 1e-9;
+    const feeEth = gasPriceEth * ETH_GAS_LIMIT;
     const feeUSD = feeEth * priceUsd;
+
     return {
       label,
       feeUSD,
       feeJPY: calcJpy(feeUSD, usdToJpy),
       speedSec,
+      gasPriceGwei: g,
+      gasLimit: ETH_GAS_LIMIT,
     };
   }
 
@@ -212,7 +229,6 @@ async function buildEthereum(prices) {
 
   const main = tiers.find(t => t.label === "standard") || tiers[0] || null;
   const now = new Date().toISOString();
-
   const feeUSD = main ? main.feeUSD : null;
   const speedSec = main ? main.speedSec : null;
 
@@ -226,17 +242,15 @@ async function buildEthereum(prices) {
   };
 }
 
-// ---------- SOL ----------
+// -------------------- SOL --------------------
+
 async function buildSolana(prices) {
   const price = prices.SOL;
   const priceUsd = Number(price.usd);
   if (!priceUsd) throw new Error("No SOL price");
 
   const usdToJpy = calcUsdToJpyRate(price);
-
-  // typical transfer: 1 signature, 5000 lamports
-  const LAMPORTS_PER_SIGNATURE = 5000;
-  const lamports = LAMPORTS_PER_SIGNATURE;
+  const lamports = SOL_LAMPORTS_PER_SIGNATURE * 1;
   const feeSol = lamports / 1e9;
   const feeUsd = feeSol * priceUsd;
 
@@ -259,12 +273,12 @@ async function buildSolana(prices) {
   };
 }
 
-// ---------- ハンドラ ----------
-module.exports = async function (req, res) {
+// -------------------- handler --------------------
+
+module.exports = async function(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const generatedAt = new Date().toISOString();
