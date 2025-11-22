@@ -107,6 +107,11 @@ async function getPrices() {
   }
 }
 
+// -------------------- cache --------------------
+
+let LAST_SNAPSHOT = null;
+let LAST_SNAPSHOT_TS = 0;
+
 // -------------------- BTC --------------------
 
 async function buildBitcoin(prices) {
@@ -190,24 +195,32 @@ async function buildEthereum(prices) {
   const usdToJpy = calcUsdToJpyRate(price);
   const r = await fetchEtherscanGasOracleV2();
 
-  const propose = r.ProposeGasPrice ?? r.proposeGasPrice;
-  const fast = r.FastGasPrice ?? r.fastGasPrice;
-  const safe = r.SafeGasPrice ?? r.safeGasPrice;
+  const proposeRaw = r.ProposeGasPrice ?? r.proposeGasPrice;
+  const fastRaw = r.FastGasPrice ?? r.fastGasPrice;
+  const safeRaw = r.SafeGasPrice ?? r.safeGasPrice;
 
-  if (propose == null && fast == null && safe == null) {
+  if (proposeRaw == null || fastRaw == null || safeRaw == null) {
     throw new Error("Missing gas fields from Etherscan");
   }
 
-  function mkTier(label, gwei, speedSec) {
-    const g = Number(gwei);
-    if (!Number.isFinite(g)) return { label, feeUSD: null, feeJPY: null, speedSec };
+  const propose = Number(proposeRaw);
+  const fast = Number(fastRaw);
+  const safe = Number(safeRaw);
 
-    // sanity check: mainnet gas < 1 gwei is almost certainly broken feed
-    if (g < 1) {
-      throw new Error(`Unrealistic gas price (${g} gwei) from Etherscan`);
+  const gasValues = [
+    { label: "standard", gwei: propose, speedSec: 120 },
+    { label: "fast", gwei: fast, speedSec: 30 },
+    { label: "slow", gwei: safe, speedSec: 300 },
+  ];
+
+  gasValues.forEach(({ gwei }) => {
+    if (!Number.isFinite(gwei) || gwei < 0.1) {
+      throw new Error(`Invalid gas price from Etherscan (${gwei})`);
     }
+  });
 
-    const gasPriceEth = g * 1e-9;
+  const tiers = gasValues.map(({ label, gwei, speedSec }) => {
+    const gasPriceEth = gwei * 1e-9;
     const feeEth = gasPriceEth * ETH_GAS_LIMIT;
     const feeUSD = feeEth * priceUsd;
 
@@ -216,16 +229,10 @@ async function buildEthereum(prices) {
       feeUSD,
       feeJPY: calcJpy(feeUSD, usdToJpy),
       speedSec,
-      gasPriceGwei: g,
+      gasPriceGwei: gwei,
       gasLimit: ETH_GAS_LIMIT,
     };
-  }
-
-  const tiers = [
-    mkTier("standard", propose, 120),
-    mkTier("fast", fast, 30),
-    mkTier("slow", safe, 300),
-  ];
+  });
 
   const main = tiers[0] || null;
   const now = new Date().toISOString();
@@ -281,6 +288,11 @@ module.exports = async function(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  const nowMs = Date.now();
+  if (LAST_SNAPSHOT && nowMs - LAST_SNAPSHOT_TS < 60_000) {
+    return res.status(200).json(LAST_SNAPSHOT);
+  }
+
   const generatedAt = new Date().toISOString();
 
   try {
@@ -291,8 +303,10 @@ module.exports = async function(req, res) {
       eth: await safeBuild(() => buildEthereum(prices), generatedAt),
       sol: await safeBuild(() => buildSolana(prices), generatedAt),
     };
-
-    return res.status(200).json({ generatedAt, chains });
+    const payload = { generatedAt, chains };
+    LAST_SNAPSHOT = payload;
+    LAST_SNAPSHOT_TS = Date.now();
+    return res.status(200).json(payload);
   } catch (e) {
     console.error("[snapshot] fatal error:", e);
     const failedChains = {
@@ -300,6 +314,9 @@ module.exports = async function(req, res) {
       eth: baseFailedChain(generatedAt, e.message || "error"),
       sol: baseFailedChain(generatedAt, e.message || "error"),
     };
-    return res.status(200).json({ generatedAt, chains: failedChains });
+    const payload = { generatedAt, chains: failedChains };
+    LAST_SNAPSHOT = payload;
+    LAST_SNAPSHOT_TS = Date.now();
+    return res.status(200).json(payload);
   }
 };
