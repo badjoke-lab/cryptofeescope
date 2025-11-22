@@ -51,6 +51,7 @@ const CHAINS = [
   { id: 'base', name: 'Base (L2 on ETH)', ticker: 'BASE', family: 'evm' },
   { id: 'polygon', name: 'Polygon', ticker: 'MATIC', family: 'evm' },
   { id: 'bsc', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
+  { id: 'avax', name: 'Avalanche C-Chain', ticker: 'AVAX', family: 'evm' },
 ];
 
 const STATE = {
@@ -310,6 +311,12 @@ function renderHistory() {
   const chainId = TBL.historyChain ? TBL.historyChain.value : 'btc';
   const points = Array.isArray(STATE.history?.[chainId]) ? STATE.history[chainId] : [];
 
+  const computedHeight = Number.parseInt(getComputedStyle(canvas).height, 10);
+  const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 600;
+  const height = computedHeight || canvas.clientHeight || 160;
+  canvas.width = width;
+  canvas.height = height;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (!points.length) {
@@ -317,11 +324,6 @@ function renderHistory() {
   }
 
   // canvas サイズ
-  const width = canvas.clientWidth || 600;
-  const height = canvas.clientHeight || 140;
-  canvas.width = width;
-  canvas.height = height;
-
   const xs = points.map(p => new Date(p.ts).getTime());
   const ys = points.map(p => p.feeUSD);
 

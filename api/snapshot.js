@@ -28,6 +28,10 @@ const EXPLORER_CONFIGS = {
     baseUrl: "https://api.bscscan.com/api",
     apiKey: process.env.BSCSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
   },
+  avax: {
+    baseUrl: "https://api.snowtrace.io/api",
+    apiKey: process.env.SNOWTRACE_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
 };
 
 // ---------- 共通 ----------
@@ -105,6 +109,7 @@ async function getPrices() {
     "optimism",
     "matic-network",
     "binancecoin",
+    "avalanche-2",
   ];
 
   const params = new URLSearchParams({
@@ -128,11 +133,23 @@ async function getPrices() {
       OP: data.optimism || {},
       MATIC: data["matic-network"] || {},
       BNB: data.binancecoin || {},
+      AVAX: data["avalanche-2"] || {},
     };
     return LAST_PRICES;
   } catch (e) {
     console.error("[snapshot] price fetch failed:", e.message);
-    return LAST_PRICES || { BTC: {}, ETH: {}, SOL: {}, ARB: {}, OP: {}, MATIC: {}, BNB: {} };
+    return (
+      LAST_PRICES || {
+        BTC: {},
+        ETH: {},
+        SOL: {},
+        ARB: {},
+        OP: {},
+        MATIC: {},
+        BNB: {},
+        AVAX: {},
+      }
+    );
   }
 }
 
@@ -308,6 +325,11 @@ async function buildBsc(prices) {
   return buildScanGasChain(prices.BNB, EXPLORER_CONFIGS.bsc);
 }
 
+// ---------- Avalanche (C-Chain) ----------
+async function buildAvalanche(prices) {
+  return buildScanGasChain(prices.AVAX, EXPLORER_CONFIGS.avax);
+}
+
 // ---------- ハンドラ ----------
 module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -330,6 +352,7 @@ module.exports = async function (req, res) {
       base: await safeBuild(() => buildBase(prices), generatedAt),
       polygon: await safeBuild(() => buildPolygon(prices), generatedAt),
       bsc: await safeBuild(() => buildBsc(prices), generatedAt),
+      avax: await safeBuild(() => buildAvalanche(prices), generatedAt),
     };
 
     return res.status(200).json({ generatedAt, chains });
@@ -344,6 +367,7 @@ module.exports = async function (req, res) {
       base: baseFailedChain(generatedAt, e.message || "error"),
       polygon: baseFailedChain(generatedAt, e.message || "error"),
       bsc: baseFailedChain(generatedAt, e.message || "error"),
+      avax: baseFailedChain(generatedAt, e.message || "error"),
     };
     return res.status(200).json({ generatedAt, chains: failedChains });
   }
