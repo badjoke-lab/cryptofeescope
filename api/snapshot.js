@@ -2,7 +2,33 @@
 // CryptoFeeScope snapshot API (8 chains)
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+
+const EXPLORER_CONFIGS = {
+  eth: {
+    baseUrl: "https://api.etherscan.io/api",
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
+  },
+  arb: {
+    baseUrl: "https://api.arbiscan.io/api",
+    apiKey: process.env.ARBISCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  op: {
+    baseUrl: "https://api-optimistic.etherscan.io/api",
+    apiKey: process.env.OPTIMISTIC_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  base: {
+    baseUrl: "https://api.basescan.org/api",
+    apiKey: process.env.BASESCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  polygon: {
+    baseUrl: "https://api.polygonscan.com/api",
+    apiKey: process.env.POLYGONSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  bsc: {
+    baseUrl: "https://api.bscscan.com/api",
+    apiKey: process.env.BSCSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+};
 
 // ---------- 共通 ----------
 async function fetchJson(url, options = {}) {
@@ -57,6 +83,8 @@ function baseFailedChain(nowIso, errorMessage = "") {
   };
 }
 
+let LAST_PRICES = null;
+
 async function safeBuild(builder, generatedAt) {
   try {
     const result = await builder();
@@ -92,7 +120,7 @@ async function getPrices() {
 
   try {
     const data = await fetchJson(`${baseUrl}?${params.toString()}`, { headers });
-    return {
+    LAST_PRICES = {
       BTC: data.bitcoin || {},
       ETH: data.ethereum || {},
       SOL: data.solana || {},
@@ -101,9 +129,10 @@ async function getPrices() {
       MATIC: data["matic-network"] || {},
       BNB: data.binancecoin || {},
     };
+    return LAST_PRICES;
   } catch (e) {
     console.error("[snapshot] price fetch failed:", e.message);
-    return { BTC: {}, ETH: {}, SOL: {}, ARB: {}, OP: {}, MATIC: {}, BNB: {} };
+    return LAST_PRICES || { BTC: {}, ETH: {}, SOL: {}, ARB: {}, OP: {}, MATIC: {}, BNB: {} };
   }
 }
 
@@ -151,47 +180,45 @@ async function buildBitcoin(prices) {
 
 // ---------- ETH ----------
 async function buildEthereum(prices) {
-  const price = prices.ETH;
-  const priceUsd = Number(price.usd);
-  if (!priceUsd) throw new Error("No ETH price");
-  if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
-
-  return buildEtherscanGasChain(prices.ETH, 1);
+  return buildScanGasChain(prices.ETH, EXPLORER_CONFIGS.eth);
 }
 
 // ---------- 共通: Etherscan 互換チェーン ----------
-async function buildEtherscanGasChain(priceObj, chainid) {
+async function buildScanGasChain(priceObj, explorerCfg) {
   const priceUsd = Number(priceObj?.usd);
-  if (!priceUsd) throw new Error("No token price for gas chain");
-  if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
+  const usdToJpy = calcUsdToJpyRate(priceObj);
+  const hasPrice = Number.isFinite(priceUsd) && priceUsd > 0;
+  if (!explorerCfg?.baseUrl) {
+    throw new Error("Explorer config missing");
+  }
 
   const params = new URLSearchParams({
-    chainid: String(chainid),
     module: "gastracker",
     action: "gasoracle",
-    apikey: ETHERSCAN_API_KEY,
   });
+  if (explorerCfg.apiKey) params.set("apikey", explorerCfg.apiKey);
 
-  const url = `https://api.etherscan.io/api?${params.toString()}`;
+  const url = `${explorerCfg.baseUrl}?${params.toString()}`;
 
   const data = await fetchJson(url);
+  const r = data.result || {};
   if (data.status === "0" || data.message === "NOTOK") {
-    throw new Error(`Etherscan gasoracle failed: ${data.message || data.result || "status 0"}`);
+    if (!r || r === "" || typeof r !== "object") {
+      throw new Error(`Gas oracle failed: ${data.message || data.result || "status 0"}`);
+    }
   }
-  if (!data.result) throw new Error("No gasoracle.result");
-  const r = data.result;
-  if (
-    r.ProposeGasPrice === undefined ||
-    r.FastGasPrice === undefined ||
-    r.SafeGasPrice === undefined
-  ) {
-    throw new Error("Missing gas price fields from Etherscan");
+  const propose = r.ProposeGasPrice ?? r.proposeGasPrice;
+  const fast = r.FastGasPrice ?? r.fastGasPrice;
+  const safe = r.SafeGasPrice ?? r.safeGasPrice;
+  if (propose === undefined && fast === undefined && safe === undefined) {
+    throw new Error("Missing gas price fields from explorer");
   }
   const GAS_LIMIT = 21000;
-  const usdToJpy = calcUsdToJpyRate(priceObj);
 
   function mkTier(label, gwei, speedSec) {
-    const g = Number(gwei) || 0;
+    const g = Number(gwei);
+    if (!Number.isFinite(g)) return { label, feeUSD: null, feeJPY: null, speedSec };
+    if (!hasPrice) return { label, feeUSD: null, feeJPY: null, speedSec };
     const gasPriceToken = g * 1e-9;
     const feeToken = gasPriceToken * GAS_LIMIT;
     const feeUSD = feeToken * priceUsd;
@@ -204,9 +231,9 @@ async function buildEtherscanGasChain(priceObj, chainid) {
   }
 
   const tiers = [
-    mkTier("standard", r.ProposeGasPrice, 120),
-    mkTier("fast", r.FastGasPrice, 30),
-    mkTier("slow", r.SafeGasPrice, 300),
+    mkTier("standard", propose ?? fast ?? safe, 120),
+    mkTier("fast", fast ?? propose ?? safe, 30),
+    mkTier("slow", safe ?? propose ?? fast, 300),
   ];
 
   const main = tiers.find(t => t.label === "standard") || tiers[0] || null;
@@ -258,35 +285,27 @@ async function buildSolana(prices) {
 
 // ---------- ARB (L2) ----------
 async function buildArbitrum(prices) {
-  const price = prices.ETH;
-  const priceUsd = Number(price.usd);
-  if (!priceUsd) throw new Error("No ETH price for Arbitrum");
-
-  return buildEtherscanGasChain(price, 42161);
+  return buildScanGasChain(prices.ETH, EXPLORER_CONFIGS.arb);
 }
 
 // ---------- OP (L2) ----------
 async function buildOptimism(prices) {
-  const price = prices.ETH;
-  const priceUsd = Number(price.usd);
-  if (!priceUsd) throw new Error("No ETH price for Optimism");
-
-  return buildEtherscanGasChain(price, 10);
+  return buildScanGasChain(prices.ETH, EXPLORER_CONFIGS.op);
 }
 
 // ---------- Base (L2) ----------
 async function buildBase(prices) {
-  return buildEtherscanGasChain(prices.ETH, 8453);
+  return buildScanGasChain(prices.ETH, EXPLORER_CONFIGS.base);
 }
 
 // ---------- Polygon ----------
 async function buildPolygon(prices) {
-  return buildEtherscanGasChain(prices.MATIC, 137);
+  return buildScanGasChain(prices.MATIC, EXPLORER_CONFIGS.polygon);
 }
 
 // ---------- BSC ----------
 async function buildBsc(prices) {
-  return buildEtherscanGasChain(prices.BNB, 56);
+  return buildScanGasChain(prices.BNB, EXPLORER_CONFIGS.bsc);
 }
 
 // ---------- ハンドラ ----------
