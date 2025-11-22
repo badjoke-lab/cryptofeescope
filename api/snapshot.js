@@ -1,14 +1,14 @@
 // api/snapshot.js
-// CryptoFeeScope snapshot API (8 chains, single Etherscan API key)
+// CryptoFeeScope snapshot API (8 chains)
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
-// ---------- Utils ----------
+// ---------- 共通 ----------
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
-    headers: { "Accept": "application/json", ...(options.headers || {}) },
+    headers: { Accept: "application/json", ...(options.headers || {}) },
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -40,33 +40,36 @@ function calcJpy(amountUsd, rate) {
   return amountUsd * rate;
 }
 
-function baseFailedChain(nowIso, msg = "") {
+function baseFailedChain(nowIso, errorMessage = "") {
   return {
     feeUSD: null,
     feeJPY: null,
     speedSec: null,
     status: "failed",
     updated: nowIso,
-    ok: false,
-    error: msg ? msg.slice(0, 200) : undefined,
     tiers: [
       { label: "standard", feeUSD: null, feeJPY: null, speedSec: null },
       { label: "fast", feeUSD: null, feeJPY: null, speedSec: null },
       { label: "slow", feeUSD: null, feeJPY: null, speedSec: null },
     ],
+    ok: false,
+    error: errorMessage ? errorMessage.slice(0, 200) : undefined,
   };
 }
 
-async function safeBuild(builder, ts) {
+// generatedAt を失敗時にも使う
+async function safeBuild(builder, generatedAt) {
   try {
-    const r = await builder();
-    return { ok: true, ...r };
+    const result = await builder();
+    return { ok: true, ...result };
   } catch (e) {
+    console.error("[snapshot] chain failed:", e.message);
+    const ts = generatedAt || new Date().toISOString();
     return baseFailedChain(ts, e.message || "error");
   }
 }
 
-// ---------- Price fetch ----------
+// ---------- 価格（USD/JPY） ----------
 async function getPrices() {
   const ids = [
     "bitcoin",
@@ -74,7 +77,7 @@ async function getPrices() {
     "solana",
     "arbitrum",
     "optimism",
-    "matic-network",
+    "polygon-pos",     // ← matic-network の代わり
     "binancecoin",
   ];
 
@@ -97,101 +100,132 @@ async function getPrices() {
       SOL: data.solana || {},
       ARB: data.arbitrum || {},
       OP: data.optimism || {},
-      MATIC: data["matic-network"] || {},
+      MATIC: data["polygon-pos"] || {},  // ← ここも polygon-pos
       BNB: data.binancecoin || {},
     };
-  } catch {
+  } catch (e) {
+    console.error("[snapshot] price fetch failed:", e.message);
     return { BTC: {}, ETH: {}, SOL: {}, ARB: {}, OP: {}, MATIC: {}, BNB: {} };
   }
 }
 
 // ---------- BTC ----------
 async function buildBitcoin(prices) {
-  const p = prices.BTC;
-  const usd = Number(p.usd);
-  if (!usd) throw new Error("No BTC price");
+  const price = prices.BTC;
+  const priceUsd = Number(price.usd);
+  if (!priceUsd) throw new Error("No BTC price");
 
-  const rate = calcUsdToJpyRate(p);
+  const usdToJpy = calcUsdToJpyRate(price);
   const data = await fetchJson("https://mempool.space/api/v1/fees/recommended");
-  const VBYTES = 140;
+  const TX_VBYTES = 140;
 
   const tiersSrc = [
-    { label: "standard", feeRate: data.halfHourFee, speedSec: 1800 },
-    { label: "fast", feeRate: data.fastestFee, speedSec: 600 },
-    { label: "slow", feeRate: data.hourFee, speedSec: 3600 },
+    { label: "standard", feeRate: data.halfHourFee, speedSec: 30 * 60 },
+    { label: "fast", feeRate: data.fastestFee, speedSec: 10 * 60 },
+    { label: "slow", feeRate: data.hourFee, speedSec: 60 * 60 },
   ];
 
-  const tiers = tiersSrc.map(t => {
-    const feeBtc = (t.feeRate * VBYTES) / 1e8;
-    const feeUSD = feeBtc * usd;
+  const tiers = tiersSrc.map((t) => {
+    const feeBtc = (t.feeRate * TX_VBYTES) / 1e8;
+    const feeUSD = feeBtc * priceUsd;
     return {
       label: t.label,
       feeUSD,
-      feeJPY: calcJpy(feeUSD, rate),
+      feeJPY: calcJpy(feeUSD, usdToJpy),
       speedSec: t.speedSec,
     };
   });
 
-  const main = tiers.find(t => t.label === "standard");
+  const main = tiers.find((t) => t.label === "standard") || tiers[0] || null;
   const now = new Date().toISOString();
+  const feeUSD = main ? main.feeUSD : null;
+  const speedSec = main ? main.speedSec : null;
 
   return {
-    feeUSD: main.feeUSD,
-    feeJPY: calcJpy(main.feeUSD, rate),
-    speedSec: main.speedSec,
-    status: decideStatus(main.feeUSD, main.speedSec),
+    feeUSD,
+    feeJPY: calcJpy(feeUSD, usdToJpy),
+    speedSec,
+    status: decideStatus(feeUSD, speedSec),
     updated: now,
     tiers,
   };
 }
 
-// ---------- Etherscan family builder ----------
-async function buildEtherscanGasChain(priceObj, url) {
-  const usd = Number(priceObj?.usd);
-  if (!usd) throw new Error("No token price");
+// ---------- ETH ----------
+async function buildEthereum(prices) {
+  const price = prices.ETH;
+  const priceUsd = Number(price.usd);
+  if (!priceUsd) throw new Error("No ETH price");
+  if (!ETHERSCAN_API_KEY) throw new Error("ETHERSCAN_API_KEY not set");
 
-  const rate = calcUsdToJpyRate(priceObj);
+  const params = new URLSearchParams({
+    module: "gastracker",
+    action: "gasoracle",
+    apikey: ETHERSCAN_API_KEY,
+  });
+
+  return buildEtherscanGasChain(prices.ETH, `https://api.etherscan.io/api?${params.toString()}`);
+}
+
+// ---------- 共通: Etherscan Gas Oracle 互換 ----------
+async function buildEtherscanGasChain(priceObj, url) {
+  const priceUsd = Number(priceObj?.usd);
+  if (!priceUsd) throw new Error("No token price for gas chain");
+
   const data = await fetchJson(url);
   if (!data.result) throw new Error("No gasoracle.result");
 
-  const r = data.result;
-  const GAS_LIMIT = 21000;
-
-  // invalid value guard
-  const gFast = Number(r.FastGasPrice);
-  const gProp = Number(r.ProposeGasPrice);
-  const gSafe = Number(r.SafeGasPrice);
-
-  if (![gFast, gProp, gSafe].every(v => Number.isFinite(v) && v > 0)) {
-    throw new Error("Invalid gas price from Etherscan chain");
+  // status がある場合は失敗検知
+  if (data.status && data.status !== "1") {
+    throw new Error(data.message || "Explorer returned error");
   }
 
-  function mk(label, gwei, sec) {
-    const gasToken = gwei * 1e-9;
-    const feeToken = gasToken * GAS_LIMIT;
-    const feeUSD = feeToken * usd;
+  const r = data.result;
+  const GAS_LIMIT = 21000;
+  const usdToJpy = calcUsdToJpyRate(priceObj);
+
+  // 値が 0/欠損でも落ちないフォールバック
+  let propose = Number(r.ProposeGasPrice);
+  let fast = Number(r.FastGasPrice);
+  let safe = Number(r.SafeGasPrice);
+
+  if (!Number.isFinite(propose) || propose <= 0) {
+    if (Number.isFinite(fast) && fast > 0) propose = fast / 1.5;
+    else if (Number.isFinite(safe) && safe > 0) propose = safe / 0.7;
+    else throw new Error("Invalid gas price from Etherscan chain");
+  }
+  if (!Number.isFinite(fast) || fast <= 0) fast = propose * 1.5;
+  if (!Number.isFinite(safe) || safe <= 0) safe = propose * 0.7;
+
+  function mkTier(label, gwei, speedSec) {
+    const g = Number(gwei) || 0;
+    const gasPriceToken = g * 1e-9;
+    const feeToken = gasPriceToken * GAS_LIMIT;
+    const feeUSD = feeToken * priceUsd;
     return {
       label,
       feeUSD,
-      feeJPY: calcJpy(feeUSD, rate),
-      speedSec: sec,
+      feeJPY: calcJpy(feeUSD, usdToJpy),
+      speedSec,
     };
   }
 
   const tiers = [
-    mk("standard", gProp, 120),
-    mk("fast", gFast, 30),
-    mk("slow", gSafe, 300),
+    mkTier("standard", propose, 120),
+    mkTier("fast", fast, 30),
+    mkTier("slow", safe, 300),
   ];
 
-  const main = tiers[0];
+  const main = tiers.find((t) => t.label === "standard") || tiers[0] || null;
   const now = new Date().toISOString();
+  const feeUSD = main ? main.feeUSD : null;
+  const speedSec = main ? main.speedSec : null;
 
   return {
-    feeUSD: main.feeUSD,
-    feeJPY: calcJpy(main.feeUSD, rate),
-    speedSec: main.speedSec,
-    status: decideStatus(main.feeUSD, main.speedSec),
+    feeUSD,
+    feeJPY: calcJpy(feeUSD, usdToJpy),
+    speedSec,
+    status: decideStatus(feeUSD, speedSec),
     updated: now,
     tiers,
   };
@@ -199,19 +233,21 @@ async function buildEtherscanGasChain(priceObj, url) {
 
 // ---------- SOL ----------
 async function buildSolana(prices) {
-  const p = prices.SOL;
-  const usd = Number(p.usd);
-  if (!usd) throw new Error("No SOL price");
+  const price = prices.SOL;
+  const priceUsd = Number(price.usd);
+  if (!priceUsd) throw new Error("No SOL price");
 
-  const rate = calcUsdToJpyRate(p);
-  const lamports = 5000;
+  const usdToJpy = calcUsdToJpyRate(price);
+  const LAMPORTS_PER_SIGNATURE = 5000;
+  const signatures = 1;
+  const lamports = LAMPORTS_PER_SIGNATURE * signatures;
   const feeSol = lamports / 1e9;
-  const feeUsd = feeSol * usd;
+  const feeUsd = feeSol * priceUsd;
 
   const tiers = [
-    { label: "standard", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, rate), speedSec: 10 },
-    { label: "fast", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, rate), speedSec: 8 },
-    { label: "slow", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, rate), speedSec: 20 },
+    { label: "standard", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, usdToJpy), speedSec: 10 },
+    { label: "fast", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, usdToJpy), speedSec: 8 },
+    { label: "slow", feeUSD: feeUsd, feeJPY: calcJpy(feeUsd, usdToJpy), speedSec: 20 },
   ];
 
   const main = tiers[0];
@@ -227,140 +263,91 @@ async function buildSolana(prices) {
   };
 }
 
-// ---------- L2 ----------
+// ---------- RPCガスチェーン共通（Base/BSC/Polygon 用） ----------
+async function buildRpcGasChain(priceObj, rpcUrl) {
+  const priceUsd = Number(priceObj?.usd);
+  if (!priceUsd) throw new Error("No token price");
+
+  const usdToJpy = calcUsdToJpyRate(priceObj);
+
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "eth_gasPrice",
+    params: [],
+  });
+
+  const rpc = await fetchJson(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+
+  const gasPriceWei = parseInt(rpc.result, 16);
+  if (!Number.isFinite(gasPriceWei)) throw new Error("Invalid gas price from RPC");
+
+  const gasPriceGwei = gasPriceWei / 1e9;
+  const GAS_LIMIT = 21000;
+
+  function mkTier(label, multiplier, speedSec) {
+    const g = gasPriceGwei * multiplier;
+    const gasPriceToken = g * 1e-9;
+    const feeToken = gasPriceToken * GAS_LIMIT;
+    const feeUSD = feeToken * priceUsd;
+    return {
+      label,
+      feeUSD,
+      feeJPY: calcJpy(feeUSD, usdToJpy),
+      speedSec,
+    };
+  }
+
+  const tiers = [
+    mkTier("standard", 1.0, 30),
+    mkTier("fast", 1.5, 10),
+    mkTier("slow", 0.7, 60),
+  ];
+
+  const main = tiers[0];
+  const now = new Date().toISOString();
+
+  return {
+    feeUSD: main.feeUSD,
+    feeJPY: main.feeJPY,
+    speedSec: main.speedSec,
+    status: decideStatus(main.feeUSD, main.speedSec),
+    updated: now,
+    tiers,
+  };
+}
+
+// ---------- ARB (L2) ----------
 async function buildArbitrum(prices) {
-  const p = prices.ETH;
-  const usd = Number(p.usd);
-  if (!usd) throw new Error("No ETH price");
-
-  const rate = calcUsdToJpyRate(p);
-
-  const rpc = await fetchJson("https://arb1.arbitrum.io/rpc", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "eth_gasPrice",
-      params: [],
-    }),
-  });
-
-  const wei = parseInt(rpc.result, 16);
-  if (!Number.isFinite(wei) || wei <= 0) throw new Error("Invalid gasPrice");
-
-  const gwei = wei / 1e9;
-  const GAS = 21000;
-
-  function mk(label, mul, sec) {
-    const gasGwei = gwei * mul;
-    const feeToken = gasGwei * 1e-9 * GAS;
-    const feeUSD = feeToken * usd;
-    return {
-      label,
-      feeUSD,
-      feeJPY: calcJpy(feeUSD, rate),
-      speedSec: sec,
-    };
-  }
-
-  const tiers = [
-    mk("standard", 1.0, 30),
-    mk("fast", 1.5, 10),
-    mk("slow", 0.7, 60),
-  ];
-
-  const main = tiers[0];
-  const now = new Date().toISOString();
-
-  return {
-    feeUSD: main.feeUSD,
-    feeJPY: calcJpy(main.feeUSD, rate),
-    speedSec: main.speedSec,
-    status: decideStatus(main.feeUSD, main.speedSec),
-    updated: now,
-    tiers,
-  };
+  // ETH価格でUSD換算（手数料はETH建て）
+  return buildRpcGasChain(prices.ETH, "https://arb1.arbitrum.io/rpc");
 }
 
+// ---------- OP (L2) ----------
 async function buildOptimism(prices) {
-  const p = prices.ETH;
-  const usd = Number(p.usd);
-  if (!usd) throw new Error("No ETH price");
-
-  const rate = calcUsdToJpyRate(p);
-
-  const rpc = await fetchJson("https://mainnet.optimism.io", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "eth_gasPrice",
-      params: [],
-    }),
-  });
-
-  const wei = parseInt(rpc.result, 16);
-  if (!Number.isFinite(wei) || wei <= 0) throw new Error("Invalid gasPrice");
-
-  const gwei = wei / 1e9;
-  const GAS = 21000;
-
-  function mk(label, mul, sec) {
-    const gasGwei = gwei * mul;
-    const feeToken = gasGwei * 1e-9 * GAS;
-    const feeUSD = feeToken * usd;
-    return {
-      label,
-      feeUSD,
-      feeJPY: calcJpy(feeUSD, rate),
-      speedSec: sec,
-    };
-  }
-
-  const tiers = [
-    mk("standard", 1.0, 30),
-    mk("fast", 1.5, 10),
-    mk("slow", 0.7, 60),
-  ];
-
-  const main = tiers[0];
-  const now = new Date().toISOString();
-
-  return {
-    feeUSD: main.feeUSD,
-    feeJPY: calcJpy(main.feeUSD, rate),
-    speedSec: main.speedSec,
-    status: decideStatus(main.feeUSD, main.speedSec),
-    updated: now,
-    tiers,
-  };
+  return buildRpcGasChain(prices.ETH, "https://mainnet.optimism.io");
 }
 
-// ---------- Base / Polygon / BSC（全部 Etherscan API Key 1個でOK） ----------
+// ---------- Base (L2) ----------
 async function buildBase(prices) {
-  return buildEtherscanGasChain(
-    prices.ETH,
-    `https://api.basescan.org/api?module=gastracker&action=gasoracle&apikey=${ETHERSCAN_API_KEY}`
-  );
+  return buildRpcGasChain(prices.ETH, "https://mainnet.base.org");
 }
 
+// ---------- Polygon ----------
 async function buildPolygon(prices) {
-  return buildEtherscanGasChain(
-    prices.MATIC,
-    `https://api.polygonscan.com/api?module=gastracker&action=gasoracle&apikey=${ETHERSCAN_API_KEY}`
-  );
+  return buildRpcGasChain(prices.MATIC, "https://polygon-rpc.com");
 }
 
+// ---------- BSC ----------
 async function buildBsc(prices) {
-  return buildEtherscanGasChain(
-    prices.BNB,
-    `https://api.bscscan.com/api?module=gastracker&action=gasoracle&apikey=${ETHERSCAN_API_KEY}`
-  );
+  return buildRpcGasChain(prices.BNB, "https://bsc-dataseed.binance.org");
 }
 
-// ---------- Handler ----------
+// ---------- ハンドラ ----------
 module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
@@ -368,37 +355,35 @@ module.exports = async function (req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const ts = new Date().toISOString();
+  const generatedAt = new Date().toISOString();
 
   try {
     const prices = await getPrices();
 
     const chains = {
-      btc: await safeBuild(() => buildBitcoin(prices), ts),
-      eth: await safeBuild(() => buildEthereum(prices), ts),
-      sol: await safeBuild(() => buildSolana(prices), ts),
-      arb: await safeBuild(() => buildArbitrum(prices), ts),
-      op:  await safeBuild(() => buildOptimism(prices), ts),
-      base: await safeBuild(() => buildBase(prices), ts),
-      polygon: await safeBuild(() => buildPolygon(prices), ts),
-      bsc: await safeBuild(() => buildBsc(prices), ts),
+      btc: await safeBuild(() => buildBitcoin(prices), generatedAt),
+      eth: await safeBuild(() => buildEthereum(prices), generatedAt),
+      sol: await safeBuild(() => buildSolana(prices), generatedAt),
+      arb: await safeBuild(() => buildArbitrum(prices), generatedAt),
+      op: await safeBuild(() => buildOptimism(prices), generatedAt),
+      base: await safeBuild(() => buildBase(prices), generatedAt),
+      polygon: await safeBuild(() => buildPolygon(prices), generatedAt),
+      bsc: await safeBuild(() => buildBsc(prices), generatedAt),
     };
 
-    return res.status(200).json({ generatedAt: ts, chains });
+    return res.status(200).json({ generatedAt, chains });
   } catch (e) {
-    const failed = id => baseFailedChain(ts, e.message || "error");
-    return res.status(200).json({
-      generatedAt: ts,
-      chains: {
-        btc: failed("btc"),
-        eth: failed("eth"),
-        sol: failed("sol"),
-        arb: failed("arb"),
-        op: failed("op"),
-        base: failed("base"),
-        polygon: failed("polygon"),
-        bsc: failed("bsc"),
-      },
-    });
+    console.error("[snapshot] fatal error:", e);
+    const failedChains = {
+      btc: baseFailedChain(generatedAt, e.message || "error"),
+      eth: baseFailedChain(generatedAt, e.message || "error"),
+      sol: baseFailedChain(generatedAt, e.message || "error"),
+      arb: baseFailedChain(generatedAt, e.message || "error"),
+      op: baseFailedChain(generatedAt, e.message || "error"),
+      base: baseFailedChain(generatedAt, e.message || "error"),
+      polygon: baseFailedChain(generatedAt, e.message || "error"),
+      bsc: baseFailedChain(generatedAt, e.message || "error"),
+    };
+    return res.status(200).json({ generatedAt, chains: failedChains });
   }
 };
