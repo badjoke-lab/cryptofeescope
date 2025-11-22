@@ -32,7 +32,6 @@ const TBL = {
   feeHeader: document.getElementById('feeHeader'),
 };
 
-const DETAILS_TOOLTIP = document.getElementById('detailsTooltip');
 const REFRESH_BTN = document.getElementById('refreshBtn');
 const THEME_BTN = document.getElementById('themeBtn');
 
@@ -61,6 +60,7 @@ const STATE = {
   priority: 'standard',
   search: '',
   lastUpdated: null,
+  openDetails: null,
 };
 
 let AUTO_REFRESH_TIMER = null;
@@ -198,6 +198,41 @@ function applyFilterAndSort() {
   return list;
 }
 
+function buildDetailsContent(data, fiat) {
+  if (!data) return '';
+  const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+  const tierMap = {
+    fast: tiers.find(t => t.label === 'fast'),
+    standard: tiers.find(t => t.label === 'standard'),
+    slow: tiers.find(t => t.label === 'slow'),
+  };
+
+  const feeUsd = data.feeUSD;
+  const feeJpy = data.feeJPY;
+  const fastFee = tierMap.fast?.feeUSD ?? feeUsd;
+  const standardFee = tierMap.standard?.feeUSD ?? feeUsd;
+  const slowFee = tierMap.slow?.feeUSD ?? feeUsd;
+
+  const fastJpy = tierMap.fast?.feeJPY ?? feeJpy;
+  const standardJpy = tierMap.standard?.feeJPY ?? feeJpy;
+  const slowJpy = tierMap.slow?.feeJPY ?? feeJpy;
+
+  const fastSpeed = tierMap.fast?.speedSec ?? data.speedSec;
+  const standardSpeed = tierMap.standard?.speedSec ?? data.speedSec;
+  const slowSpeed = tierMap.slow?.speedSec ?? (standardSpeed != null ? standardSpeed * 2 : null);
+
+  return `
+    <div class="fee-details-block">
+      <div class="mono strong">Exact fee: ${fmtFiat(feeUsd, feeJpy, fiat)}</div>
+      <div class="gas-tiers-wrapper">
+        <div class="mono">Fast (~${fmtTierSpeed(fastSpeed)}): ${fmtFiat(fastFee, fastJpy, fiat)}</div>
+        <div class="mono">Normal (~${fmtTierSpeed(standardSpeed)}): ${fmtFiat(standardFee, standardJpy, fiat)}</div>
+        <div class="mono">Slow (~${fmtTierSpeed(slowSpeed, true)}): ${fmtFiat(slowFee, slowJpy, fiat)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   if (!TBL.tbody) return;
 
@@ -230,7 +265,7 @@ function render() {
       ? `<button type="button" class="details-btn" data-chain-id="${chain.id}">Details</button>`
       : '<span class="muted">—</span>';
 
-    return `
+    let rowHtml = `
       <tr data-chain-id="${chain.id}">
         <td>${chain.name}</td>
         <td class="mono">${chain.ticker}</td>
@@ -241,12 +276,21 @@ function render() {
         <td class="updated">${updatedHtml}</td>
       </tr>
     `;
+
+    if (STATE.openDetails === chain.id && hasTiers) {
+      rowHtml += `
+        <tr class="fee-details-row" data-details-for="${chain.id}">
+          <td colspan="7" class="fee-details-cell">${buildDetailsContent(data, fiat)}</td>
+        </tr>
+      `;
+    }
+
+    return rowHtml;
   }).join('');
 
   TBL.tbody.innerHTML = rowsHtml;
 
   updateFeeHeader();
-  attachDetailsTooltipHandlers();
 }
 
 // フィアット切り替えヘッダ
@@ -310,78 +354,6 @@ function renderHistory() {
   ctx.stroke();
 }
 
-// ----- Details tooltip (Exact fee + tiers) -----
-let DETAILS_TOOLTIP_BOUND = false;
-
-function attachDetailsTooltipHandlers() {
-  if (DETAILS_TOOLTIP_BOUND || !TBL.tbody || !DETAILS_TOOLTIP) return;
-  DETAILS_TOOLTIP_BOUND = true;
-
-  // テーブル内クリック
-  TBL.tbody.addEventListener('click', (e) => {
-    const btn = e.target.closest('.details-btn');
-    if (!btn) return;
-
-    const chainId = btn.dataset.chainId;
-    const data = STATE.snapshot && STATE.snapshot[chainId];
-    if (!data) return;
-
-    const fiat = STATE.fiat;
-    const feeUsd = data.feeUSD;
-    const feeJpy = data.feeJPY;
-    if (feeUsd == null || !Number.isFinite(feeUsd)) return;
-
-    const tiers = Array.isArray(data.tiers) ? data.tiers : [];
-    const tierMap = {
-      fast: tiers.find(t => t.label === 'fast'),
-      standard: tiers.find(t => t.label === 'standard'),
-      slow: tiers.find(t => t.label === 'slow'),
-    };
-
-    const htmlParts = [];
-    htmlParts.push(`<div class="mono strong">Exact fee: ${fmtFiat(feeUsd, feeJpy, fiat)}</div>`);
-
-    const fastFee = tierMap.fast?.feeUSD ?? feeUsd;
-    const standardFee = tierMap.standard?.feeUSD ?? feeUsd;
-    const slowFee = tierMap.slow?.feeUSD ?? feeUsd;
-
-    const fastJpy = tierMap.fast?.feeJPY ?? feeJpy;
-    const standardJpy = tierMap.standard?.feeJPY ?? feeJpy;
-    const slowJpy = tierMap.slow?.feeJPY ?? feeJpy;
-
-    const fastSpeed = tierMap.fast?.speedSec ?? data.speedSec;
-    const standardSpeed = tierMap.standard?.speedSec ?? data.speedSec;
-    const slowSpeed = tierMap.slow?.speedSec ?? (standardSpeed != null ? standardSpeed * 2 : null);
-
-    htmlParts.push(`<div class="mono">Fast (~${fmtTierSpeed(fastSpeed)}): ${fmtFiat(fastFee, fastJpy, fiat)}</div>`);
-    htmlParts.push(`<div class="mono">Normal (~${fmtTierSpeed(standardSpeed)}): ${fmtFiat(standardFee, standardJpy, fiat)}</div>`);
-    htmlParts.push(`<div class="mono">Slow (~${fmtTierSpeed(slowSpeed, true)}): ${fmtFiat(slowFee, slowJpy, fiat)}</div>`);
-
-    DETAILS_TOOLTIP.innerHTML = htmlParts.join('');
-
-    // 位置調整：Details ボタンのすぐ下
-    const rect = btn.getBoundingClientRect();
-    const scrollY = window.scrollY || document.documentElement.scrollTop;
-    const scrollX = window.scrollX || document.documentElement.scrollLeft;
-
-    DETAILS_TOOLTIP.style.position = 'absolute';
-    DETAILS_TOOLTIP.style.left = `${rect.left + scrollX}px`;
-    DETAILS_TOOLTIP.style.top = `${rect.bottom + 8 + scrollY}px`;
-    DETAILS_TOOLTIP.style.display = 'block';
-    DETAILS_TOOLTIP.classList.remove('hidden');
-  });
-
-  // テーブル外クリックで閉じる
-  document.addEventListener('click', (e) => {
-    if (!DETAILS_TOOLTIP) return;
-    if (e.target.closest('.details-btn') || e.target.closest('#detailsTooltip')) {
-      return;
-    }
-    DETAILS_TOOLTIP.style.display = 'none';
-    DETAILS_TOOLTIP.classList.add('hidden');
-  });
-}
-
 // ----- Event bindings -----
 function bindUI() {
   if (TBL.q) {
@@ -401,6 +373,17 @@ function bindUI() {
   if (TBL.fiat) {
     TBL.fiat.addEventListener('change', (e) => {
       STATE.fiat = e.target.value || 'USD';
+      render();
+    });
+  }
+
+  if (TBL.tbody) {
+    TBL.tbody.addEventListener('click', (e) => {
+      const btn = e.target.closest('.details-btn');
+      if (!btn) return;
+      const chainId = btn.dataset.chainId;
+      const isOpen = STATE.openDetails === chainId;
+      STATE.openDetails = isOpen ? null : chainId;
       render();
     });
   }
