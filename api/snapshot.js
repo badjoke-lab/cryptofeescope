@@ -222,12 +222,12 @@ async function buildEthereum(prices) {
   }
 
   const tiers = [
-    mkTier("standard", propose ?? fast ?? safe, 120),
-    mkTier("fast", fast ?? propose ?? safe, 30),
-    mkTier("slow", safe ?? propose ?? fast, 300),
+    mkTier("standard", propose, 120),
+    mkTier("fast", fast, 30),
+    mkTier("slow", safe, 300),
   ];
 
-  const main = tiers.find(t => t.label === "standard") || tiers[0] || null;
+  const main = tiers[0] || null;
   const now = new Date().toISOString();
   const feeUSD = main ? main.feeUSD : null;
   const speedSec = main ? main.speedSec : null;
