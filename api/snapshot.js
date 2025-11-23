@@ -1,36 +1,76 @@
 // api/snapshot.js
-// Reliability-first snapshot API with per-chain caching, Etherscan v2 gasoracle,
-// strict rate-limit spacing, last_good cache, and anomaly guards.
+// Reliability-first snapshot API with per-chain caching, last_good fallbacks,
+// Etherscan v2 + per-chain gas oracles, anomaly rejection, and rate limiting.
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
 
-const ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api";
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+// ---- Etherscan v2 / scan-v2 base URLs ----
+// v2 endpoints (per docs). Each chain uses its own v2 host and chainid.
+const EXPLORER_V2 = {
+  eth: {
+    baseUrl: "https://api.etherscan.io/v2/api",
+    chainid: "1",
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
+  },
+  arb: {
+    baseUrl: "https://api.arbiscan.io/v2/api",
+    chainid: "42161",
+    apiKey: process.env.ARBISCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  op: {
+    baseUrl: "https://api-optimistic.etherscan.io/v2/api",
+    chainid: "10",
+    apiKey: process.env.OPTIMISTIC_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  base: {
+    baseUrl: "https://api.basescan.org/v2/api",
+    chainid: "8453",
+    apiKey: process.env.BASESCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  polygon: {
+    baseUrl: "https://api.polygonscan.com/v2/api",
+    chainid: "137",
+    apiKey: process.env.POLYGONSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  bsc: {
+    baseUrl: "https://api.bscscan.com/v2/api",
+    chainid: "56",
+    apiKey: process.env.BSCSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+  avax: {
+    baseUrl: "https://api.snowtrace.io/v2/api",
+    chainid: "43114",
+    apiKey: process.env.SNOWTRACE_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+  },
+};
 
-const TTL_GLOBAL_MS = 60_000;     // snapshot whole payload cache
+const TTL_GLOBAL_MS = 60_000;
 const DEFAULT_USD_TO_JPY = 150;
 
-// ---- caches ----
 let LAST_SNAPSHOT = null;
 let LAST_AT = 0;
 let LAST_PRICES = null;
-let LAST_GOOD_CHAINS = {}; // { [chainId]: { data, at } }
+let LAST_GOOD_CHAINS = {};
 
-// ---- chain TTLs ----
+// ---- Per-chain TTL ----
 const CHAIN_TTL_MS = {
   btc: 60_000,
   eth: 60_000,
   sol: 60_000,
-  arb: 60_000,
-  op: 60_000,
-  base: 60_000,
-  polygon: 90_000,
-  bsc: 90_000,
-  avax: 90_000,
-  default: 120_000,
+  arb: 90_000,
+  op: 90_000,
+  base: 90_000,
+  polygon: 120_000,
+  bsc: 120_000,
+  avax: 120_000,
+  default: 180_000,
 };
 
-// ---- prices (coingecko ids) ----
+function getChainTTL(chainId) {
+  return CHAIN_TTL_MS[chainId] ?? CHAIN_TTL_MS.default;
+}
+
+// ---- Price IDs for Coingecko ----
 const PRICE_ID_MAP = {
   BTC: "bitcoin",
   ETH: "ethereum",
@@ -43,45 +83,35 @@ const PRICE_ID_MAP = {
   AVAX: "avalanche-2",
 };
 
-// ---- EVM chainids for Etherscan v2 ----
-const EVM_CHAINIDS = {
-  eth: 1,
-  arb: 42161,
-  op: 10,
-  base: 8453,
-  polygon: 137,
-  bsc: 56,
-  avax: 43114,
-};
-
-// ---- fallback prices (USD) if no price + no cache ----
+// ---- Fallback token prices (only used if zero cached) ----
 const FALLBACK_TOKEN_PRICE_USD = {
-  ETH: 2500,
-  ARB: 1.0,
-  OP: 1.5,
-  BASE: 2500,
+  ETH: 1800,
+  ARB: 1.2,
+  OP: 1.2,
+  BASE: 1800,
   POLYGON: 0.7,
-  BSC: 600,
-  AVAX: 40,
+  BSC: 230,
+  AVAX: 30,
 };
 
-const FALLBACK_GAS = { safe: 5, propose: 10, fast: 20 };
+// ---- Fallback gas (gwei) ----
+const FALLBACK_GAS = { safe: 10, propose: 12, fast: 15 };
+
+// ---- Gas limit for simple transfer ----
 const GAS_LIMIT = 21_000;
 
-// ---- anomaly caps (USD) ----
-// L2/cheap chains should never be $1+ for a simple transfer.
-// If exceeded, treat as anomaly and fall back.
+// ---- Anomaly caps (simple transfer fee upper bounds) ----
+// If live fee exceeds cap, we refuse to cache it (throw => cached/fallback used)
 const ANOMALY_CAP_USD = {
-  eth: 5.0,       // ETH mainnet can be higher but still keep some sanity
-  arb: 0.5,
-  op: 0.5,
-  base: 0.5,
-  polygon: 0.5,
-  bsc: 0.5,
-  avax: 0.5,
+  eth: 25,      // ETH can spike, but not hundreds for a simple transfer
+  arb: 1.0,     // ARB simple transfer usually cents
+  op: 1.0,      // OP simple transfer usually cents
+  base: 1.0,    // BASE simple transfer usually cents
+  polygon: 1.0,
+  bsc: 1.0,
+  avax: 2.0,
 };
 
-// ---------- common ----------
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -119,7 +149,7 @@ function calcJpy(amountUsd, rate) {
   return amountUsd * usdToJpy;
 }
 
-function baseChain(nowIso, errorMessage = "") {
+function baseChain(nowIso) {
   return {
     feeUSD: null,
     feeJPY: null,
@@ -132,7 +162,6 @@ function baseChain(nowIso, errorMessage = "") {
       { label: "slow", feeUSD: null, feeJPY: null, speedSec: null },
     ],
     ok: false,
-    error: errorMessage ? errorMessage.slice(0, 200) : undefined,
   };
 }
 
@@ -140,11 +169,7 @@ function chainWithSource(data, source, staleSec) {
   return { ...data, source, staleSec };
 }
 
-function getChainTTL(chainId) {
-  return CHAIN_TTL_MS[chainId] ?? CHAIN_TTL_MS.default;
-}
-
-// ---------- prices ----------
+// ---------------- Prices (Coingecko) ----------------
 async function getPrices() {
   const ids = Array.from(new Set(Object.values(PRICE_ID_MAP)));
 
@@ -179,16 +204,16 @@ async function getPrices() {
   }
 }
 
-// ---------- Etherscan v2 gasoracle per chain ----------
-async function fetchGasOracleV2(chainid) {
+// ---------------- Etherscan v2 gas oracle (per chain) ----------------
+async function fetchGasOracleV2(cfg) {
   const params = new URLSearchParams({
-    chainid: String(chainid),
+    chainid: cfg.chainid,
     module: "gastracker",
     action: "gasoracle",
   });
-  if (ETHERSCAN_API_KEY) params.set("apikey", ETHERSCAN_API_KEY);
+  if (cfg.apiKey) params.set("apikey", cfg.apiKey);
 
-  const url = `${ETHERSCAN_V2_BASE}?${params.toString()}`;
+  const url = `${cfg.baseUrl}?${params.toString()}`;
   const data = await fetchJson(url);
   const r = data.result || {};
 
@@ -201,49 +226,60 @@ async function fetchGasOracleV2(chainid) {
   const safe = Number(r.SafeGasPrice ?? r.safeGasPrice);
 
   const valid = [propose, fast, safe].every(v => Number.isFinite(v) && v > 0);
-  if (!valid) throw new Error("Invalid gas price values from Etherscan V2");
+  if (!valid) throw new Error("Invalid gas price values from explorer v2");
 
   return { propose, fast, safe };
 }
 
-function mkEthTier(label, gwei, speedSec, priceUsd, usdToJpy, gasLimit) {
+function mkEvmTier(label, gwei, speedSec, priceUsd, usdToJpy, gasLimit) {
   const g = Number(gwei);
   const price = Number(priceUsd);
   const hasPrice = Number.isFinite(price) && price > 0;
+
   const gasPriceEth = Number.isFinite(g) ? g * 1e-9 : null;
   const feeEth = gasPriceEth !== null ? gasPriceEth * gasLimit : null;
   const feeUSD = feeEth !== null && hasPrice ? feeEth * price : null;
-  const feeJPY = calcJpy(feeUSD, usdToJpy);
-  return { label, feeUSD, feeJPY, speedSec };
+
+  return {
+    label,
+    feeUSD,
+    feeJPY: calcJpy(feeUSD, usdToJpy),
+    speedSec,
+  };
 }
 
 function buildEvmTiers(gas, priceUsd, usdToJpy) {
   return [
-    mkEthTier("standard", gas.propose, 120, priceUsd, usdToJpy, GAS_LIMIT),
-    mkEthTier("fast", gas.fast, 30, priceUsd, usdToJpy, GAS_LIMIT),
-    mkEthTier("slow", gas.safe, 300, priceUsd, usdToJpy, GAS_LIMIT),
+    mkEvmTier("standard", gas.propose, 120, priceUsd, usdToJpy, GAS_LIMIT),
+    mkEvmTier("fast", gas.fast, 30, priceUsd, usdToJpy, GAS_LIMIT),
+    mkEvmTier("slow", gas.safe, 300, priceUsd, usdToJpy, GAS_LIMIT),
   ];
+}
+
+function evmPrice(chainKey, prices) {
+  const upper = chainKey.toUpperCase();
+  if (upper === "BASE") return prices.ETH || {};
+  return prices[upper] || {};
 }
 
 async function buildEvmChain(chainKey, ctx) {
   const generatedAt = ctx.generatedAt;
   const prices = ctx.prices;
 
-  const chainid = EVM_CHAINIDS[chainKey];
-  if (!chainid) throw new Error(`Unknown EVM chain: ${chainKey}`);
-
-  // fetch gas for this chain (live)
-  const gas = await fetchGasOracleV2(chainid);
-
-  const priceObj = prices[chainKey.toUpperCase()] || {};
+  const priceObj = evmPrice(chainKey, prices);
   const priceUsd = Number(priceObj.usd);
   const usdToJpy = calcUsdToJpyRate(priceObj);
 
   if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
-    throw new Error(`No ${chainKey.toUpperCase()} price`);
+    throw new Error(`No ${chainKey} price`);
   }
 
+  const cfg = EXPLORER_V2[chainKey];
+  if (!cfg) throw new Error(`No explorer config for ${chainKey}`);
+
+  const gas = await fetchGasOracleV2(cfg);
   const tiers = buildEvmTiers(gas, priceUsd, usdToJpy);
+
   const main = tiers[0];
   const feeUSD = main.feeUSD;
   const speedSec = main.speedSec;
@@ -252,10 +288,10 @@ async function buildEvmChain(chainKey, ctx) {
     throw new Error(`Invalid ${chainKey} fee data`);
   }
 
-  // anomaly guard
+  // ---- anomaly rejection (do NOT cache garbage) ----
   const cap = ANOMALY_CAP_USD[chainKey];
   if (Number.isFinite(cap) && feeUSD > cap) {
-    throw new Error(`Anomalous ${chainKey} feeUSD=${feeUSD} (> cap ${cap})`);
+    throw new Error(`${chainKey} anomalous feeUSD=${feeUSD} > cap=${cap} (refuse cache)`);
   }
 
   return {
@@ -273,10 +309,8 @@ async function fallbackEvmChain(chainKey, ctx) {
   const generatedAt = ctx.generatedAt;
   const priceUsd = FALLBACK_TOKEN_PRICE_USD[chainKey.toUpperCase()] || 1;
   const usdToJpy = DEFAULT_USD_TO_JPY;
-
   const tiers = buildEvmTiers(FALLBACK_GAS, priceUsd, usdToJpy);
   const main = tiers[0];
-
   return {
     feeUSD: main.feeUSD,
     feeJPY: main.feeJPY,
@@ -288,12 +322,16 @@ async function fallbackEvmChain(chainKey, ctx) {
   };
 }
 
-// ---------- BTC ----------
+// ---------------- BTC ----------------
 async function buildBitcoin(ctx) {
+  const generatedAt = ctx.generatedAt;
   const prices = ctx.prices;
+
   const price = prices.BTC || {};
   const priceUsd = Number(price.usd);
-  if (!Number.isFinite(priceUsd) || priceUsd <= 0) throw new Error("No BTC price");
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+    throw new Error("No BTC price");
+  }
 
   const usdToJpy = calcUsdToJpyRate(price);
   const data = await fetchJson("https://mempool.space/api/v1/fees/recommended");
@@ -329,13 +367,14 @@ async function buildBitcoin(ctx) {
     feeJPY: calcJpy(feeUSD, usdToJpy),
     speedSec,
     status: decideStatus(feeUSD, speedSec),
-    updated: ctx.generatedAt,
+    updated: generatedAt,
     tiers,
     ok: true,
   };
 }
 
 async function fallbackBitcoin(ctx) {
+  const generatedAt = ctx.generatedAt;
   const feeUSD = 0.15;
   const feeJPY = calcJpy(feeUSD, DEFAULT_USD_TO_JPY);
   const tiers = [
@@ -348,18 +387,22 @@ async function fallbackBitcoin(ctx) {
     feeJPY,
     speedSec: 30 * 60,
     status: decideStatus(feeUSD, 30 * 60),
-    updated: ctx.generatedAt,
+    updated: generatedAt,
     tiers,
     ok: true,
   };
 }
 
-// ---------- SOL ----------
+// ---------------- SOL ----------------
 async function buildSolana(ctx) {
+  const generatedAt = ctx.generatedAt;
   const prices = ctx.prices;
+
   const price = prices.SOL || {};
   const priceUsd = Number(price.usd);
-  if (!Number.isFinite(priceUsd) || priceUsd <= 0) throw new Error("No SOL price");
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+    throw new Error("No SOL price");
+  }
 
   const usdToJpy = calcUsdToJpyRate(price);
   const LAMPORTS_PER_SIGNATURE = 5000;
@@ -378,13 +421,14 @@ async function buildSolana(ctx) {
     feeJPY: calcJpy(main.feeUSD, usdToJpy),
     speedSec: main.speedSec,
     status: decideStatus(main.feeUSD, main.speedSec),
-    updated: ctx.generatedAt,
+    updated: generatedAt,
     tiers,
     ok: true,
   };
 }
 
 async function fallbackSolana(ctx) {
+  const generatedAt = ctx.generatedAt;
   const feeUSD = 0.0006;
   const feeJPY = calcJpy(feeUSD, DEFAULT_USD_TO_JPY);
   const tiers = [
@@ -397,13 +441,13 @@ async function fallbackSolana(ctx) {
     feeJPY,
     speedSec: 10,
     status: decideStatus(feeUSD, 10),
-    updated: ctx.generatedAt,
+    updated: generatedAt,
     tiers,
     ok: true,
   };
 }
 
-// ---------- resolve with cache / last_good ----------
+// ---------------- Cache resolver ----------------
 async function resolveChain(chainId, builder, fallbackBuilder, ctx) {
   const now = ctx.now;
   const cached = LAST_GOOD_CHAINS[chainId];
@@ -432,30 +476,31 @@ async function resolveChain(chainId, builder, fallbackBuilder, ctx) {
   }
 }
 
-// ---------- strict rate-limit spacing for EVM calls ----------
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
+// ---------------- Simple promise pool ----------------
+async function runPromisePool(tasks, limit = 2) {
+  const results = {};
+  let index = 0;
+  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
+    while (index < tasks.length) {
+      const current = tasks[index++];
+      results[current.key] = await current.fn();
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
-async function resolveEvmWithSpacing(keys, ctx, spacingMs = 260) {
-  const out = {};
-  for (const key of keys) {
-    out[key] = await resolveChain(
-      key,
-      c => buildEvmChain(key, c),
-      c => fallbackEvmChain(key, c),
-      ctx
-    );
-    await sleep(spacingMs); // keep under ~5 req/sec to Etherscan v2
-  }
-  return out;
+// ---------------- Rate limit helper (<= ~4.5 calls/sec) ----------------
+async function throttleStep(i, delayMs = 220) {
+  if (i > 0) await new Promise(r => setTimeout(r, delayMs));
 }
 
-// ---------- handler ----------
+// ---------------- Handler ----------------
 module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const now = Date.now();
@@ -469,15 +514,28 @@ module.exports = async function (req, res) {
     const prices = await getPrices();
     const ctx = { now, generatedAt, prices };
 
-    // Non-EVM first (cheap, independent)
-    const btc = await resolveChain("btc", buildBitcoin, fallbackBitcoin, ctx);
-    const sol = await resolveChain("sol", buildSolana, fallbackSolana, ctx);
+    // Independent chains in parallel (no Etherscan usage)
+    const independentTasks = [
+      { key: "btc", fn: () => resolveChain("btc", buildBitcoin, fallbackBitcoin, ctx) },
+      { key: "sol", fn: () => resolveChain("sol", buildSolana, fallbackSolana, ctx) },
+    ];
+    const independentResults = await runPromisePool(independentTasks, 2);
 
-    // EVM chains spaced to respect v2 limit
-    const evmKeys = ["eth", "arb", "op", "base", "polygon", "bsc", "avax"];
-    const evmResults = await resolveEvmWithSpacing(evmKeys, ctx, 260);
+    // EVM chains sequential + throttled to respect 5 calls/sec
+    const evmChains = ["eth", "arb", "op", "base", "polygon", "bsc", "avax"];
+    const evmResults = {};
+    for (let i = 0; i < evmChains.length; i++) {
+      const key = evmChains[i];
+      await throttleStep(i);
+      evmResults[key] = await resolveChain(
+        key,
+        c => buildEvmChain(key, c),
+        c => fallbackEvmChain(key, c),
+        ctx
+      );
+    }
 
-    const chains = { btc, sol, ...evmResults };
+    const chains = { ...independentResults, ...evmResults };
 
     const payload = { generatedAt, chains };
     LAST_SNAPSHOT = payload;
@@ -485,10 +543,11 @@ module.exports = async function (req, res) {
     return res.status(200).json(payload);
   } catch (e) {
     console.error("[snapshot] fatal error:", e);
-    const chainKeys = ["btc","eth","sol","arb","op","base","polygon","bsc","avax"];
+
+    const chainKeys = ["btc", "eth", "sol", "arb", "op", "base", "polygon", "bsc", "avax"];
     const chains = chainKeys.reduce((acc, key) => {
       const cached = LAST_GOOD_CHAINS[key];
-      const fallback = cached?.data || baseChain(generatedAt, e.message || "error");
+      const fallback = cached?.data || baseChain(generatedAt);
       acc[key] = chainWithSource(
         fallback,
         cached ? "cached" : "fallback",
@@ -496,6 +555,7 @@ module.exports = async function (req, res) {
       );
       return acc;
     }, {});
+
     const payload = { generatedAt, chains };
     LAST_SNAPSHOT = LAST_SNAPSHOT || payload;
     LAST_AT = LAST_AT || now;
