@@ -31,13 +31,25 @@ function getFetch() {
   return fetchImpl;
 }
 
-async function fetchJson(url, options = {}) {
-  const res = await getFetch()(url, options);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+async function fetchJson(url, options = {}, retries = 2) {
+  let attempt = 0;
+  let lastErr;
+  while (attempt <= retries) {
+    try {
+      const res = await getFetch()(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return res.json();
+    } catch (e) {
+      lastErr = e;
+      if (attempt === retries) break;
+      await new Promise(r => setTimeout(r, 400 * Math.pow(2, attempt)));
+      attempt++;
+    }
   }
-  return res.json();
+  throw lastErr;
 }
 
 const COINGECKO_IDS = {

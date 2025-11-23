@@ -156,13 +156,19 @@ function asNumberMaybe(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-async function safeCandidate(provider, type, fn) {
+async function safeCandidate(meta, fn) {
+  const base = typeof meta === "string" ? { provider: meta } : meta;
   try {
     const value = await fn();
     const num = asNumberMaybe(value);
-    return { provider, type, value: num, ok: Number.isFinite(num) };
+    return { ...base, value: num, ok: Number.isFinite(num) };
   } catch (e) {
-    return { provider, type, value: null, ok: false, error: e.message || String(e) };
+    return {
+      ...base,
+      value: null,
+      ok: false,
+      error: e?.message || String(e),
+    };
   }
 }
 
@@ -509,122 +515,361 @@ function hexToNumber(hex) {
   return parseInt(hex, 16);
 }
 
+function symbolForChain(chain) {
+  const map = {
+    btc: "BTC",
+    eth: "ETH",
+    bsc: "BSC",
+    polygon: "POLYGON",
+    avax: "AVAX",
+    arb: "ARB",
+    op: "OP",
+    base: "BASE",
+    sol: "SOL",
+    xrp: "XRP",
+  };
+  return map[chain];
+}
+
+async function getTestPriceUSD(chain) {
+  const symbol = symbolForChain(chain);
+  if (!symbol) return null;
+  const prices = await getPrices();
+  const p = prices?.[symbol]?.usd;
+  if (Number.isFinite(p)) return p;
+  return FALLBACK_TOKEN_PRICE_USD[symbol] || null;
+}
+
+function calcGasUsd(gwei, gasLimit, priceUsd) {
+  if (!Number.isFinite(gwei) || !Number.isFinite(gasLimit) || !Number.isFinite(priceUsd)) return null;
+  const ethFee = (gwei / 1e9) * gasLimit;
+  return ethFee * priceUsd;
+}
+
+function calcBtcUsd(satPerVb, vbytes, priceUsd) {
+  if (!Number.isFinite(satPerVb) || !Number.isFinite(vbytes) || !Number.isFinite(priceUsd)) return null;
+  const btc = (satPerVb * vbytes) / 1e8;
+  return btc * priceUsd;
+}
+
+function calcSolUsd(lamports, signatures, priceUsd) {
+  if (!Number.isFinite(lamports) || !Number.isFinite(priceUsd)) return null;
+  const totalLamports = signatures ? lamports * signatures : lamports;
+  return (totalLamports / 1e9) * priceUsd;
+}
+
+function calcXrpUsd(feeXrp, priceUsd) {
+  if (!Number.isFinite(feeXrp) || !Number.isFinite(priceUsd)) return null;
+  return feeXrp * priceUsd;
+}
+
 async function getEvmFeeCandidates(chain) {
   const cfg = EXPLORER_V2[chain];
   const candidates = [];
+  const priceUsd = await getTestPriceUSD(chain);
 
-  candidates.push(
-    await safeCandidate("rpc", "gasPrice-wei", async () => {
+  const gasPriceRpc = await safeCandidate(
+    {
+      provider: "rpc",
+      type: "gasPrice-wei",
+      logicId: "evm_fee_logic:gasprice_raw_gwei",
+      sourceId: "rpc/gasPrice-wei",
+    },
+    async () => {
       const res = await fetchRpc(chain, "eth_gasPrice", []);
       return hexToNumber(res) / 1e9;
-    })
+    }
   );
 
-  candidates.push(
-    await safeCandidate("rpc", "feeHistory-base", async () => {
+  const feeHistoryBase = await safeCandidate(
+    {
+      provider: "rpc",
+      type: "feeHistory-base",
+      logicId: "evm_fee_logic:basefee_last",
+      sourceId: "rpc/feeHistory-base",
+    },
+    async () => {
       const res = await fetchRpc(chain, "eth_feeHistory", [2, "latest", []]);
       const base = Array.isArray(res?.baseFeePerGas)
         ? hexToNumber(res.baseFeePerGas.slice(-1)[0])
         : null;
       return base !== null ? base / 1e9 : null;
-    })
+    }
   );
 
-  if (cfg) {
+  const gasOraclePropose = cfg
+    ? await safeCandidate(
+        {
+          provider: "scan-v2",
+          type: "gasoracle-propose",
+          logicId: "evm_fee_logic:oracle_propose",
+          sourceId: "scan-v2/gasoracle-propose",
+        },
+        async () => {
+          const r = await fetchGasOracleV2(cfg);
+          return r.propose;
+        }
+      )
+    : null;
+
+  const gasOracleFast = cfg
+    ? await safeCandidate(
+        {
+          provider: "scan-v2",
+          type: "gasoracle-fast",
+          logicId: "evm_fee_logic:oracle_fast",
+          sourceId: "scan-v2/gasoracle-fast",
+        },
+        async () => {
+          const r = await fetchGasOracleV2(cfg);
+          return r.fast;
+        }
+      )
+    : null;
+
+  const scanGasPrice = cfg
+    ? await safeCandidate(
+        {
+          provider: "scan-v2",
+          type: "gasprice",
+          logicId: "evm_fee_logic:scan_gasprice",
+          sourceId: "scan-v2/proxy-gasprice",
+        },
+        async () => {
+          const params = new URLSearchParams({ module: "proxy", action: "eth_gasPrice" });
+          if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+          const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+          const val = hexToNumber(data?.result);
+          return val ? val / 1e9 : null;
+        }
+      )
+    : null;
+
+  const scanFeeHistory = cfg
+    ? await safeCandidate(
+        {
+          provider: "scan-v2",
+          type: "feehistory",
+          logicId: "evm_fee_logic:scan_feehistory",
+          sourceId: "scan-v2/feehistory",
+        },
+        async () => {
+          const params = new URLSearchParams({
+            module: "gastracker",
+            action: "feehistory",
+            chainid: cfg.chainid,
+          });
+          if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+          const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+          const base = Array.isArray(data?.result?.baseFeePerGas)
+            ? Number(data.result.baseFeePerGas[0])
+            : null;
+          return base;
+        }
+      )
+    : null;
+
+  const baseCandidates = [gasPriceRpc, feeHistoryBase, gasOraclePropose, gasOracleFast, scanGasPrice, scanFeeHistory].filter(
+    Boolean
+  );
+
+  const assumePriority = [1, 1.5, 2];
+  const gasLimits = [
+    { label: "transfer", value: 21_000 },
+    { label: "erc20", value: 65_000 },
+  ];
+
+  for (const base of baseCandidates) {
+    for (const gl of gasLimits) {
+      candidates.push(
+        await safeCandidate(
+          {
+            provider: base.provider,
+            type: `${base.type}-${gl.label}-gasprice`,
+            logicId: `evm_fee_logic:${gl.label}_${gl.value}_gasprice`,
+            sourceId: base.sourceId,
+            assumptions: { gasLimit: gl.value, pricing: "legacy" },
+          },
+          async () => calcGasUsd(base.value, gl.value, priceUsd)
+        )
+      );
+    }
+
+    for (const tip of assumePriority) {
+      candidates.push(
+        await safeCandidate(
+          {
+            provider: base.provider,
+            type: `${base.type}-1559-transfer-tip-${tip}`,
+            logicId: `evm_fee_logic:transfer_21000_basefee_plus_priority_${tip}`,
+            sourceId: base.sourceId,
+            assumptions: { gasLimit: 21_000, priorityFeeGwei: tip, pricing: "1559" },
+          },
+          async () => (base.value !== null ? calcGasUsd(base.value + tip, 21_000, priceUsd) : null)
+        )
+      );
+    }
+  }
+
+  // L2 specific additional candidates (include/exclude L1 data)
+  if (["arb", "op", "base"].includes(chain)) {
+    const l1DataGas = chain === "arb" ? 16_000 : 20_000;
+    const l1Premium = chain === "arb" ? 1.5 : 1;
+    const l1GasPriceGwei = feeHistoryBase?.value || gasPriceRpc?.value;
+
     candidates.push(
-      await safeCandidate("scan-v2", "gasoracle-propose", async () => {
-        const r = await fetchGasOracleV2(cfg);
-        return r.propose;
-      })
+      await safeCandidate(
+        {
+          provider: "l2-synthetic",
+          type: "l2-transfer-no-l1",
+          logicId: "l2_fee_logic:transfer_l2_only",
+          sourceId: "rpc/gasPrice-wei",
+          assumptions: { includeL1: false, gasLimit: 21_000 },
+        },
+        async () => calcGasUsd(gasPriceRpc?.value, 21_000, priceUsd)
+      )
     );
 
     candidates.push(
-      await safeCandidate("scan-v2", "gasoracle-fast", async () => {
-        const r = await fetchGasOracleV2(cfg);
-        return r.fast;
-      })
-    );
-
-    candidates.push(
-      await safeCandidate("scan-v2", "gasprice", async () => {
-        const params = new URLSearchParams({ module: "proxy", action: "eth_gasPrice" });
-        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
-        const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
-        const val = hexToNumber(data?.result);
-        return val ? val / 1e9 : null;
-      })
-    );
-
-    candidates.push(
-      await safeCandidate("scan-v2", "feehistory", async () => {
-        const params = new URLSearchParams({
-          module: "gastracker",
-          action: "feehistory",
-          chainid: cfg.chainid,
-        });
-        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
-        const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
-        const base = Array.isArray(data?.result?.baseFeePerGas)
-          ? Number(data.result.baseFeePerGas[0])
-          : null;
-        return base;
-      })
+      await safeCandidate(
+        {
+          provider: "l2-synthetic",
+          type: "l2-transfer-with-l1",
+          logicId: "l2_fee_logic:transfer_with_l1_data",
+          sourceId: "rpc/gasPrice-wei + estimate",
+          assumptions: { includeL1: true, l1DataGas, l1Pricing: "estimated" },
+        },
+        async () => {
+          if (!Number.isFinite(l1GasPriceGwei)) return null;
+          const l2 = calcGasUsd(gasPriceRpc?.value, 21_000, priceUsd);
+          const l1 = calcGasUsd(l1GasPriceGwei * l1Premium, l1DataGas, priceUsd);
+          if (!Number.isFinite(l2) || !Number.isFinite(l1)) return null;
+          return l1 + l2;
+        }
+      )
     );
   }
 
-  candidates.push({ provider: "blocknative", type: "gas", value: null, ok: false, error: "API key not set" });
+  candidates.push({
+    provider: "blocknative",
+    type: "gas",
+    logicId: "blocknative",
+    sourceId: "blocknative",
+    value: null,
+    ok: false,
+    error: "API key not set",
+  });
 
   return candidates;
 }
 
 async function getBitcoinFeeCandidates() {
   const candidates = [];
-  candidates.push(
-    await safeCandidate("mempool.space", "minimum", async () => {
-      const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
-      return d?.minimumFee;
-    })
-  );
-  candidates.push(
-    await safeCandidate("mempool.space", "recommended", async () => {
+  const priceUsd = await getTestPriceUSD("btc");
+
+  const mempoolRecommended = await safeCandidate(
+    {
+      provider: "mempool.space",
+      type: "recommended",
+      logicId: "btc_fee_logic:mempool_halfhour_sats",
+      sourceId: "mempool/fees-recommended",
+    },
+    async () => {
       const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
       return d?.halfHourFee;
-    })
+    }
   );
-  candidates.push(
-    await safeCandidate("mempool.space", "fastest", async () => {
+
+  const mempoolMinimum = await safeCandidate(
+    {
+      provider: "mempool.space",
+      type: "minimum",
+      logicId: "btc_fee_logic:mempool_minimum_sats",
+      sourceId: "mempool/fees-recommended",
+    },
+    async () => {
+      const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
+      return d?.minimumFee;
+    }
+  );
+
+  const mempoolFastest = await safeCandidate(
+    {
+      provider: "mempool.space",
+      type: "fastest",
+      logicId: "btc_fee_logic:mempool_fastest_sats",
+      sourceId: "mempool/fees-recommended",
+    },
+    async () => {
       const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
       return d?.fastestFee;
-    })
+    }
   );
 
-  const blockEst = await safeCandidate("mempool.space", "blocks", async () => {
-    const d = await fetchJson("https://mempool.space/api/v1/fee-estimates");
-    return d?.["1"];
-  });
-  candidates.push(blockEst);
-  for (let i = 2; i <= 6; i++) {
-    candidates.push(
-      await safeCandidate("mempool.space", `block-${i}`, async () => {
-        const d = await fetchJson("https://mempool.space/api/v1/fee-estimates");
-        return d?.[String(i)];
-      })
-    );
-  }
-
-  candidates.push(
-    await safeCandidate("blockstream.info", "estimatesmartfee-1", async () => {
+  const blockstream1 = await safeCandidate(
+    {
+      provider: "blockstream.info",
+      type: "estimatesmartfee-1",
+      logicId: "btc_fee_logic:blockstream_1",
+      sourceId: "blockstream/fee-estimates",
+    },
+    async () => {
       const d = await fetchJson("https://blockstream.info/api/fee-estimates");
       return d?.["1"];
-    })
+    }
   );
-  for (let i = 2; i <= 6; i++) {
-    candidates.push(
-      await safeCandidate("blockstream.info", `estimatesmartfee-${i}`, async () => {
-        const d = await fetchJson("https://blockstream.info/api/fee-estimates");
-        return d?.[String(i)];
-      })
-    );
+
+  const blockstream6 = await safeCandidate(
+    {
+      provider: "blockstream.info",
+      type: "estimatesmartfee-6",
+      logicId: "btc_fee_logic:blockstream_6",
+      sourceId: "blockstream/fee-estimates",
+    },
+    async () => {
+      const d = await fetchJson("https://blockstream.info/api/fee-estimates");
+      return d?.["6"];
+    }
+  );
+
+  const mempoolBlocks = await safeCandidate(
+    {
+      provider: "mempool.space",
+      type: "block-1",
+      logicId: "btc_fee_logic:mempool_block1",
+      sourceId: "mempool/fee-estimates",
+    },
+    async () => {
+      const d = await fetchJson("https://mempool.space/api/v1/fee-estimates");
+      return d?.["1"];
+    }
+  );
+
+  const satCandidates = [
+    mempoolRecommended,
+    mempoolMinimum,
+    mempoolFastest,
+    blockstream1,
+    blockstream6,
+    mempoolBlocks,
+  ];
+
+  const vbyteAssumptions = [140, 225, 250, 400];
+  for (const sat of satCandidates) {
+    for (const vb of vbyteAssumptions) {
+      candidates.push(
+        await safeCandidate(
+          {
+            provider: sat.provider,
+            type: `${sat.type}-v${vb}`,
+            logicId: `btc_fee_logic:${sat.type}_vbytes_${vb}`,
+            sourceId: sat.sourceId,
+            assumptions: { vbytes: vb },
+          },
+          async () => calcBtcUsd(sat.value, vb, priceUsd)
+        )
+      );
+    }
   }
 
   return candidates;
@@ -632,20 +877,38 @@ async function getBitcoinFeeCandidates() {
 
 async function getSolanaFeeCandidates() {
   const candidates = [];
+  const priceUsd = await getTestPriceUSD("sol");
   const endpoint = "https://api.mainnet-beta.solana.com";
-  candidates.push(
-    await safeCandidate("solana-rpc", "base-fee", async () => {
+
+  const baseLamports = await safeCandidate(
+    {
+      provider: "solana-rpc",
+      type: "base-fee",
+      logicId: "sol_fee_logic:lamports_per_sig",
+      sourceId: "solana/getFees",
+      assumptions: { signatures: 1 },
+    },
+    async () => {
       const res = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getFees", params: [] }),
       });
-      return res?.value?.feeCalculator?.lamportsPerSignature;
-    })
+      const lamports = res?.value?.feeCalculator?.lamportsPerSignature;
+      return lamports ? calcSolUsd(lamports, 1, priceUsd) : null;
+    }
   );
+  candidates.push(baseLamports);
 
-  candidates.push(
-    await safeCandidate("solana-rpc", "getFeeForMessage", async () => {
+  const prioritized = await safeCandidate(
+    {
+      provider: "solana-rpc",
+      type: "getPrioritizationFee",
+      logicId: "sol_fee_logic:prioritization_fee_per_sig",
+      sourceId: "solana/getRecentPrioritizationFees",
+      assumptions: { signatures: 1 },
+    },
+    async () => {
       const res = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -657,15 +920,26 @@ async function getSolanaFeeCandidates() {
         }),
       });
       const val = Array.isArray(res?.result) && res.result.length > 0 ? res.result[0].prioritizationFee : null;
-      return val ?? null;
-    })
+      return val ? calcSolUsd(val, 1, priceUsd) : null;
+    }
   );
+  candidates.push(prioritized);
 
   candidates.push(
-    await safeCandidate("solscan", "latest-tx-average", async () => {
-      const d = await fetchJson("https://api.solscan.io/chaininfo");
-      return d?.data?.txAvgFee;
-    })
+    await safeCandidate(
+      {
+        provider: "solscan",
+        type: "latest-tx-average",
+        logicId: "sol_fee_logic:solscan_avg",
+        sourceId: "solscan/chaininfo",
+        assumptions: { avgTx: true },
+      },
+      async () => {
+        const d = await fetchJson("https://api.solscan.io/chaininfo");
+        const lamports = d?.data?.txAvgFee;
+        return lamports ? calcSolUsd(lamports, 1, priceUsd) : null;
+      }
+    )
   );
   return candidates;
 }
@@ -673,34 +947,65 @@ async function getSolanaFeeCandidates() {
 async function getXrpFeeCandidates() {
   const endpoint = "https://s1.ripple.com:51234/";
   const candidates = [];
+  const priceUsd = await getTestPriceUSD("xrp");
   candidates.push(
-    await safeCandidate("rippled", "base-fee", async () => {
-      const res = await fetchWithTimeout(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ method: "server_info", params: [{}] }),
-      });
-      return res?.result?.info?.validated_ledger?.base_fee_xrp;
-    })
+    await safeCandidate(
+      {
+        provider: "rippled",
+        type: "base-fee",
+        logicId: "xrp_fee_logic:base_fee",
+        sourceId: "rippled/server_info",
+        assumptions: { loadAdjusted: false },
+      },
+      async () => {
+        const res = await fetchWithTimeout(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ method: "server_info", params: [{}] }),
+        });
+        const fee = res?.result?.info?.validated_ledger?.base_fee_xrp;
+        return calcXrpUsd(fee, priceUsd);
+      }
+    )
   );
   candidates.push(
-    await safeCandidate("rippled", "load-adjusted", async () => {
-      const res = await fetchWithTimeout(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ method: "server_state", params: [{}] }),
-      });
-      const base = res?.result?.state?.validated_ledger?.base_fee_xrp;
-      const factor = res?.result?.state?.load_factor ?? 1;
-      return Number(base) * Number(factor);
-    })
+    await safeCandidate(
+      {
+        provider: "rippled",
+        type: "load-adjusted",
+        logicId: "xrp_fee_logic:load_adjusted",
+        sourceId: "rippled/server_state",
+        assumptions: { loadAdjusted: true },
+      },
+      async () => {
+        const res = await fetchWithTimeout(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ method: "server_state", params: [{}] }),
+        });
+        const base = res?.result?.state?.validated_ledger?.base_fee_xrp;
+        const factor = res?.result?.state?.load_factor ?? 1;
+        return calcXrpUsd(Number(base) * Number(factor), priceUsd);
+      }
+    )
   );
 
   candidates.push(
-    await safeCandidate("xrpscan", "current-fee", async () => {
-      const d = await fetchJson("https://api.xrpscan.com/api/v1/network/fees");
-      return d?.drops?.base_fee;
-    })
+    await safeCandidate(
+      {
+        provider: "xrpscan",
+        type: "current-fee",
+        logicId: "xrp_fee_logic:xrpscan_base_fee",
+        sourceId: "xrpscan/network/fees",
+        assumptions: { dropValue: true },
+      },
+      async () => {
+        const d = await fetchJson("https://api.xrpscan.com/api/v1/network/fees");
+        const drops = d?.drops?.base_fee;
+        const feeXrp = drops ? Number(drops) / 1_000_000 : null;
+        return calcXrpUsd(feeXrp, priceUsd);
+      }
+    )
   );
   return candidates;
 }
@@ -716,27 +1021,61 @@ async function getBitcoinSpeedCandidates() {
   const candidates = [];
 
   candidates.push(
-    await safeCandidate("blockstream.info", "blocktime", async () => {
-      const blocks = await fetchJson("https://blockstream.info/api/blocks?limit=2");
-      if (!Array.isArray(blocks) || blocks.length < 2) return null;
-      const t1 = blocks[0]?.timestamp;
-      const t2 = blocks[1]?.timestamp;
-      return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
-    })
+    await safeCandidate(
+      {
+        provider: "blockstream.info",
+        type: "blocktime",
+        logicId: "btc_speed_logic:block_interval_blockstream",
+        sourceId: "blockstream/blocks",
+        assumptions: { window: 2 },
+      },
+      async () => {
+        const blocks = await fetchJson("https://blockstream.info/api/blocks?limit=2");
+        if (!Array.isArray(blocks) || blocks.length < 2) return null;
+        const t1 = blocks[0]?.timestamp;
+        const t2 = blocks[1]?.timestamp;
+        return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
+      }
+    )
   );
 
   candidates.push(
-    await safeCandidate("mempool.space", "blocktime", async () => {
-      const blocks = await fetchJson("https://mempool.space/api/v1/blocks");
-      if (!Array.isArray(blocks) || blocks.length < 2) return null;
-      const t1 = blocks[0]?.timestamp;
-      const t2 = blocks[1]?.timestamp;
-      return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
-    })
+    await safeCandidate(
+      {
+        provider: "mempool.space",
+        type: "blocktime",
+        logicId: "btc_speed_logic:block_interval_mempool",
+        sourceId: "mempool/blocks",
+        assumptions: { window: 2 },
+      },
+      async () => {
+        const blocks = await fetchJson("https://mempool.space/api/v1/blocks");
+        if (!Array.isArray(blocks) || blocks.length < 2) return null;
+        const t1 = blocks[0]?.timestamp;
+        const t2 = blocks[1]?.timestamp;
+        return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
+      }
+    )
   );
 
-  candidates.push({ provider: "mempool.space", type: "expected-recommended", value: 1800, ok: true });
-  candidates.push({ provider: "mempool.space", type: "expected-fastest", value: 600, ok: true });
+  candidates.push({
+    provider: "mempool.space",
+    type: "expected-recommended",
+    logicId: "btc_speed_logic:estimate_recommended",
+    sourceId: "heuristic",
+    assumptions: { blocks: 3 },
+    value: 1800,
+    ok: true,
+  });
+  candidates.push({
+    provider: "mempool.space",
+    type: "expected-fastest",
+    logicId: "btc_speed_logic:estimate_fastest",
+    sourceId: "heuristic",
+    assumptions: { blocks: 1 },
+    value: 600,
+    ok: true,
+  });
 
   return candidates;
 }
@@ -744,33 +1083,67 @@ async function getBitcoinSpeedCandidates() {
 async function getEvmSpeedCandidates(chain) {
   const candidates = [];
   candidates.push(
-    await safeCandidate("rpc", "blocktime", async () => {
-      const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
-      const latest = hexToNumber(latestHex);
-      const b1 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + latest.toString(16), false]);
-      const b0 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + (latest - 1).toString(16), false]);
-      const t1 = hexToNumber(b1?.timestamp);
-      const t0 = hexToNumber(b0?.timestamp);
-      return t1 && t0 ? t1 - t0 : null;
-    })
+    await safeCandidate(
+      {
+        provider: "rpc",
+        type: "blocktime",
+        logicId: "evm_speed_logic:block_interval",
+        sourceId: "rpc/eth_getBlockByNumber",
+        assumptions: { window: 2 },
+      },
+      async () => {
+        const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
+        const latest = hexToNumber(latestHex);
+        const b1 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + latest.toString(16), false]);
+        const b0 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + (latest - 1).toString(16), false]);
+        const t1 = hexToNumber(b1?.timestamp);
+        const t0 = hexToNumber(b0?.timestamp);
+        return t1 && t0 ? t1 - t0 : null;
+      }
+    )
   );
 
   const cfg = EXPLORER_V2[chain];
   if (cfg) {
     candidates.push(
-      await safeCandidate("scan-v2", "blocktime", async () => {
-        const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
-        const latest = hexToNumber(latestHex);
-        const params = new URLSearchParams({ module: "block", action: "getblockreward", blockno: latest });
-        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
-        const d = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
-        return d?.result?.timeStamp ? Number(d.result.timeStamp) : null;
-      })
+      await safeCandidate(
+        {
+          provider: "scan-v2",
+          type: "blocktime",
+          logicId: "evm_speed_logic:scan_blockreward_timestamp",
+          sourceId: "scan-v2/block/getblockreward",
+          assumptions: { latest: true },
+        },
+        async () => {
+          const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
+          const latest = hexToNumber(latestHex);
+          const params = new URLSearchParams({ module: "block", action: "getblockreward", blockno: latest });
+          if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+          const d = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+          return d?.result?.timeStamp ? Number(d.result.timeStamp) : null;
+        }
+      )
     );
   }
 
-  candidates.push({ provider: "priority-fee", type: "estimate-delay-fast", value: 30, ok: true });
-  candidates.push({ provider: "priority-fee", type: "estimate-delay-normal", value: 120, ok: true });
+  candidates.push({
+    provider: "priority-fee",
+    type: "estimate-delay-fast",
+    logicId: "evm_speed_logic:estimate_priority_fast",
+    sourceId: "heuristic",
+    assumptions: { percentile: 90 },
+    value: 30,
+    ok: true,
+  });
+  candidates.push({
+    provider: "priority-fee",
+    type: "estimate-delay-normal",
+    logicId: "evm_speed_logic:estimate_priority_normal",
+    sourceId: "heuristic",
+    assumptions: { percentile: 50 },
+    value: 120,
+    ok: true,
+  });
   return candidates;
 }
 
@@ -833,6 +1206,47 @@ async function getSpeedCandidates(chain) {
   if (chain === "sol") return getSolanaSpeedCandidates();
   if (chain === "xrp") return getXrpSpeedCandidates();
   return getEvmSpeedCandidates(chain);
+}
+
+function withKeys(list) {
+  return (list || []).map(c => ({ ...c, key: `${c.provider}:${c.type}` }));
+}
+
+async function __TEST_calcFeeUSD(chainId, candidateKey, rawInputs = {}) {
+  const priceUsd = rawInputs.priceUsd ?? (await getTestPriceUSD(chainId));
+  if (Number.isFinite(rawInputs.gwei) && Number.isFinite(rawInputs.gasLimit)) {
+    return calcGasUsd(rawInputs.gwei, rawInputs.gasLimit, priceUsd);
+  }
+  if (Number.isFinite(rawInputs.baseFee) && Number.isFinite(rawInputs.priorityFee) && Number.isFinite(rawInputs.gasLimit)) {
+    return calcGasUsd(rawInputs.baseFee + rawInputs.priorityFee, rawInputs.gasLimit, priceUsd);
+  }
+  if (Number.isFinite(rawInputs.satPerVb) && Number.isFinite(rawInputs.vbytes)) {
+    return calcBtcUsd(rawInputs.satPerVb, rawInputs.vbytes, priceUsd);
+  }
+  if (Number.isFinite(rawInputs.lamports)) {
+    return calcSolUsd(rawInputs.lamports, rawInputs.signatures || 1, priceUsd);
+  }
+  if (Number.isFinite(rawInputs.xrpFee)) {
+    return calcXrpUsd(rawInputs.xrpFee, priceUsd);
+  }
+  if (candidateKey?.includes("l2-transfer-with-l1") && Number.isFinite(rawInputs.l1Gas) && Number.isFinite(rawInputs.l2Gas)) {
+    const l2 = calcGasUsd(rawInputs.l2Gas, rawInputs.gasLimit || 21_000, priceUsd);
+    const l1 = calcGasUsd(rawInputs.l1Gas, rawInputs.l1DataGas || 16_000, priceUsd);
+    if (Number.isFinite(l1) && Number.isFinite(l2)) return l1 + l2;
+  }
+  return null;
+}
+
+async function __TEST_calcSpeedSec(chainId, candidateKey, rawInputs = {}) {
+  if (Array.isArray(rawInputs.timestamps) && rawInputs.timestamps.length >= 2) {
+    const [t1, t0] = rawInputs.timestamps;
+    const delta = Number(t1) - Number(t0);
+    return Number.isFinite(delta) ? Math.abs(delta) : null;
+  }
+  if (Number.isFinite(rawInputs.blockInterval)) return rawInputs.blockInterval;
+  if (candidateKey?.includes("expected-fastest")) return 600;
+  if (candidateKey?.includes("expected-recommended")) return 1800;
+  return null;
 }
 
 // ---------------- Cache resolver ----------------
@@ -952,5 +1366,9 @@ module.exports = async function (req, res) {
 };
 
 // Test-only exports
-module.exports.__TEST_getFeeCandidates = getFeeCandidates;
-module.exports.__TEST_getSpeedCandidates = getSpeedCandidates;
+if (process.env.CFS_TEST) {
+  module.exports.__TEST_getFeeCandidates = async chainId => withKeys(await getFeeCandidates(chainId));
+  module.exports.__TEST_getSpeedCandidates = async chainId => withKeys(await getSpeedCandidates(chainId));
+  module.exports.__TEST_calcFeeUSD = __TEST_calcFeeUSD;
+  module.exports.__TEST_calcSpeedSec = __TEST_calcSpeedSec;
+}
