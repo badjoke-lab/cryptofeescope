@@ -81,6 +81,7 @@ const PRICE_ID_MAP = {
   POLYGON: "polygon",
   BSC: "binancecoin",
   AVAX: "avalanche-2",
+  XRP: "ripple",
 };
 
 // ---- Fallback token prices (only used if zero cached) ----
@@ -92,6 +93,7 @@ const FALLBACK_TOKEN_PRICE_USD = {
   POLYGON: 0.7,
   BSC: 230,
   AVAX: 30,
+  XRP: 0.5,
 };
 
 // ---- Fallback gas (gwei) ----
@@ -147,6 +149,38 @@ function calcJpy(amountUsd, rate) {
   const r = Number(rate);
   const usdToJpy = Number.isFinite(r) && r > 0 ? r : DEFAULT_USD_TO_JPY;
   return amountUsd * usdToJpy;
+}
+
+function asNumberMaybe(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function safeCandidate(provider, type, fn) {
+  try {
+    const value = await fn();
+    const num = asNumberMaybe(value);
+    return { provider, type, value: num, ok: Number.isFinite(num) };
+  } catch (e) {
+    return { provider, type, value: null, ok: false, error: e.message || String(e) };
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return res.json();
+    return res.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function baseChain(nowIso) {
@@ -447,6 +481,360 @@ async function fallbackSolana(ctx) {
   };
 }
 
+// ---------------- Test helpers: fee/speed candidates ----------------
+const RPC_ENDPOINTS = {
+  eth: "https://rpc.ankr.com/eth",
+  bsc: "https://bsc-dataseed.binance.org",
+  polygon: "https://polygon-rpc.com",
+  avax: "https://api.avax.network/ext/bc/C/rpc",
+  arb: "https://arb1.arbitrum.io/rpc",
+  op: "https://mainnet.optimism.io",
+  base: "https://mainnet.base.org",
+};
+
+async function fetchRpc(chain, method, params = []) {
+  const url = RPC_ENDPOINTS[chain];
+  if (!url) throw new Error(`No RPC endpoint for ${chain}`);
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (!res || res.error) throw new Error(res?.error?.message || "RPC error");
+  return res.result;
+}
+
+function hexToNumber(hex) {
+  if (typeof hex !== "string") return null;
+  return parseInt(hex, 16);
+}
+
+async function getEvmFeeCandidates(chain) {
+  const cfg = EXPLORER_V2[chain];
+  const candidates = [];
+
+  candidates.push(
+    await safeCandidate("rpc", "gasPrice-wei", async () => {
+      const res = await fetchRpc(chain, "eth_gasPrice", []);
+      return hexToNumber(res) / 1e9;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("rpc", "feeHistory-base", async () => {
+      const res = await fetchRpc(chain, "eth_feeHistory", [2, "latest", []]);
+      const base = Array.isArray(res?.baseFeePerGas)
+        ? hexToNumber(res.baseFeePerGas.slice(-1)[0])
+        : null;
+      return base !== null ? base / 1e9 : null;
+    })
+  );
+
+  if (cfg) {
+    candidates.push(
+      await safeCandidate("scan-v2", "gasoracle-propose", async () => {
+        const r = await fetchGasOracleV2(cfg);
+        return r.propose;
+      })
+    );
+
+    candidates.push(
+      await safeCandidate("scan-v2", "gasoracle-fast", async () => {
+        const r = await fetchGasOracleV2(cfg);
+        return r.fast;
+      })
+    );
+
+    candidates.push(
+      await safeCandidate("scan-v2", "gasprice", async () => {
+        const params = new URLSearchParams({ module: "proxy", action: "eth_gasPrice" });
+        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+        const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+        const val = hexToNumber(data?.result);
+        return val ? val / 1e9 : null;
+      })
+    );
+
+    candidates.push(
+      await safeCandidate("scan-v2", "feehistory", async () => {
+        const params = new URLSearchParams({
+          module: "gastracker",
+          action: "feehistory",
+          chainid: cfg.chainid,
+        });
+        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+        const data = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+        const base = Array.isArray(data?.result?.baseFeePerGas)
+          ? Number(data.result.baseFeePerGas[0])
+          : null;
+        return base;
+      })
+    );
+  }
+
+  candidates.push({ provider: "blocknative", type: "gas", value: null, ok: false, error: "API key not set" });
+
+  return candidates;
+}
+
+async function getBitcoinFeeCandidates() {
+  const candidates = [];
+  candidates.push(
+    await safeCandidate("mempool.space", "minimum", async () => {
+      const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
+      return d?.minimumFee;
+    })
+  );
+  candidates.push(
+    await safeCandidate("mempool.space", "recommended", async () => {
+      const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
+      return d?.halfHourFee;
+    })
+  );
+  candidates.push(
+    await safeCandidate("mempool.space", "fastest", async () => {
+      const d = await fetchJson("https://mempool.space/api/v1/fees/recommended");
+      return d?.fastestFee;
+    })
+  );
+
+  const blockEst = await safeCandidate("mempool.space", "blocks", async () => {
+    const d = await fetchJson("https://mempool.space/api/v1/fee-estimates");
+    return d?.["1"];
+  });
+  candidates.push(blockEst);
+  for (let i = 2; i <= 6; i++) {
+    candidates.push(
+      await safeCandidate("mempool.space", `block-${i}`, async () => {
+        const d = await fetchJson("https://mempool.space/api/v1/fee-estimates");
+        return d?.[String(i)];
+      })
+    );
+  }
+
+  candidates.push(
+    await safeCandidate("blockstream.info", "estimatesmartfee-1", async () => {
+      const d = await fetchJson("https://blockstream.info/api/fee-estimates");
+      return d?.["1"];
+    })
+  );
+  for (let i = 2; i <= 6; i++) {
+    candidates.push(
+      await safeCandidate("blockstream.info", `estimatesmartfee-${i}`, async () => {
+        const d = await fetchJson("https://blockstream.info/api/fee-estimates");
+        return d?.[String(i)];
+      })
+    );
+  }
+
+  return candidates;
+}
+
+async function getSolanaFeeCandidates() {
+  const candidates = [];
+  const endpoint = "https://api.mainnet-beta.solana.com";
+  candidates.push(
+    await safeCandidate("solana-rpc", "base-fee", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getFees", params: [] }),
+      });
+      return res?.value?.feeCalculator?.lamportsPerSignature;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("solana-rpc", "getFeeForMessage", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getRecentPrioritizationFees",
+          params: [["11111111111111111111111111111111"]],
+        }),
+      });
+      const val = Array.isArray(res?.result) && res.result.length > 0 ? res.result[0].prioritizationFee : null;
+      return val ?? null;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("solscan", "latest-tx-average", async () => {
+      const d = await fetchJson("https://api.solscan.io/chaininfo");
+      return d?.data?.txAvgFee;
+    })
+  );
+  return candidates;
+}
+
+async function getXrpFeeCandidates() {
+  const endpoint = "https://s1.ripple.com:51234/";
+  const candidates = [];
+  candidates.push(
+    await safeCandidate("rippled", "base-fee", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "server_info", params: [{}] }),
+      });
+      return res?.result?.info?.validated_ledger?.base_fee_xrp;
+    })
+  );
+  candidates.push(
+    await safeCandidate("rippled", "load-adjusted", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "server_state", params: [{}] }),
+      });
+      const base = res?.result?.state?.validated_ledger?.base_fee_xrp;
+      const factor = res?.result?.state?.load_factor ?? 1;
+      return Number(base) * Number(factor);
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("xrpscan", "current-fee", async () => {
+      const d = await fetchJson("https://api.xrpscan.com/api/v1/network/fees");
+      return d?.drops?.base_fee;
+    })
+  );
+  return candidates;
+}
+
+async function getFeeCandidates(chain) {
+  if (chain === "btc") return getBitcoinFeeCandidates();
+  if (chain === "sol") return getSolanaFeeCandidates();
+  if (chain === "xrp") return getXrpFeeCandidates();
+  return getEvmFeeCandidates(chain);
+}
+
+async function getBitcoinSpeedCandidates() {
+  const candidates = [];
+
+  candidates.push(
+    await safeCandidate("blockstream.info", "blocktime", async () => {
+      const blocks = await fetchJson("https://blockstream.info/api/blocks?limit=2");
+      if (!Array.isArray(blocks) || blocks.length < 2) return null;
+      const t1 = blocks[0]?.timestamp;
+      const t2 = blocks[1]?.timestamp;
+      return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("mempool.space", "blocktime", async () => {
+      const blocks = await fetchJson("https://mempool.space/api/v1/blocks");
+      if (!Array.isArray(blocks) || blocks.length < 2) return null;
+      const t1 = blocks[0]?.timestamp;
+      const t2 = blocks[1]?.timestamp;
+      return Number(t1) && Number(t2) ? Math.abs(Number(t1) - Number(t2)) : null;
+    })
+  );
+
+  candidates.push({ provider: "mempool.space", type: "expected-recommended", value: 1800, ok: true });
+  candidates.push({ provider: "mempool.space", type: "expected-fastest", value: 600, ok: true });
+
+  return candidates;
+}
+
+async function getEvmSpeedCandidates(chain) {
+  const candidates = [];
+  candidates.push(
+    await safeCandidate("rpc", "blocktime", async () => {
+      const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
+      const latest = hexToNumber(latestHex);
+      const b1 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + latest.toString(16), false]);
+      const b0 = await fetchRpc(chain, "eth_getBlockByNumber", ["0x" + (latest - 1).toString(16), false]);
+      const t1 = hexToNumber(b1?.timestamp);
+      const t0 = hexToNumber(b0?.timestamp);
+      return t1 && t0 ? t1 - t0 : null;
+    })
+  );
+
+  const cfg = EXPLORER_V2[chain];
+  if (cfg) {
+    candidates.push(
+      await safeCandidate("scan-v2", "blocktime", async () => {
+        const latestHex = await fetchRpc(chain, "eth_blockNumber", []);
+        const latest = hexToNumber(latestHex);
+        const params = new URLSearchParams({ module: "block", action: "getblockreward", blockno: latest });
+        if (cfg.apiKey) params.set("apikey", cfg.apiKey);
+        const d = await fetchJson(`${cfg.baseUrl}?${params.toString()}`);
+        return d?.result?.timeStamp ? Number(d.result.timeStamp) : null;
+      })
+    );
+  }
+
+  candidates.push({ provider: "priority-fee", type: "estimate-delay-fast", value: 30, ok: true });
+  candidates.push({ provider: "priority-fee", type: "estimate-delay-normal", value: 120, ok: true });
+  return candidates;
+}
+
+async function getSolanaSpeedCandidates() {
+  const endpoint = "https://api.mainnet-beta.solana.com";
+  const candidates = [];
+  candidates.push(
+    await safeCandidate("solana-rpc", "slot-time", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getRecentPerformanceSamples", params: [10] }),
+      });
+      const sample = Array.isArray(res?.result) && res.result.length > 0 ? res.result[0] : null;
+      if (!sample || !sample.numSlots || !sample.samplePeriodSecs) return null;
+      return sample.samplePeriodSecs / sample.numSlots;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("solscan", "blocktime", async () => {
+      const d = await fetchJson("https://api.solscan.io/chaininfo");
+      return d?.data?.blockTime;
+    })
+  );
+
+  candidates.push({ provider: "rpc", type: "recent-performance", value: 0.4, ok: true });
+  return candidates;
+}
+
+async function getXrpSpeedCandidates() {
+  const endpoint = "https://s1.ripple.com:51234/";
+  const candidates = [];
+  candidates.push(
+    await safeCandidate("rippled", "ledger_close_time", async () => {
+      const res = await fetchWithTimeout(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "ledger", params: [{ ledger_index: "validated" }] }),
+      });
+      return res?.result?.ledger?.close_time_resolved ? 4 : null;
+    })
+  );
+
+  candidates.push(
+    await safeCandidate("xrpscan", "latest-ledger-interval", async () => {
+      const d = await fetchJson("https://api.xrpscan.com/api/v1/ledger?limit=2");
+      const list = d?.ledgers;
+      if (!Array.isArray(list) || list.length < 2) return null;
+      const t1 = new Date(list[0].close_time).getTime();
+      const t0 = new Date(list[1].close_time).getTime();
+      return (t1 - t0) / 1000;
+    })
+  );
+  return candidates;
+}
+
+async function getSpeedCandidates(chain) {
+  if (chain === "btc") return getBitcoinSpeedCandidates();
+  if (chain === "sol") return getSolanaSpeedCandidates();
+  if (chain === "xrp") return getXrpSpeedCandidates();
+  return getEvmSpeedCandidates(chain);
+}
+
 // ---------------- Cache resolver ----------------
 async function resolveChain(chainId, builder, fallbackBuilder, ctx) {
   const now = ctx.now;
@@ -562,3 +950,7 @@ module.exports = async function (req, res) {
     return res.status(200).json(payload);
   }
 };
+
+// Test-only exports
+module.exports.__TEST_getFeeCandidates = getFeeCandidates;
+module.exports.__TEST_getSpeedCandidates = getSpeedCandidates;
