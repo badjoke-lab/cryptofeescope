@@ -41,9 +41,19 @@ function deviation(values, center) {
   return avg;
 }
 
+function mad(values, center) {
+  if (!center || !values.length) return null;
+  const diffs = values.map(v => Math.abs(v - center)).sort((a, b) => a - b);
+  const mid = Math.floor(diffs.length / 2);
+  if (diffs.length === 0) return null;
+  if (diffs.length % 2 === 0) return (diffs[mid - 1] + diffs[mid]) / 2;
+  return diffs[mid];
+}
+
 module.exports = {
   getAllFeeCandidates,
   getAllSpeedCandidates,
   median,
   deviation,
+  mad,
 };
