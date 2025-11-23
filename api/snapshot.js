@@ -1,57 +1,54 @@
 // api/snapshot.js
-// Reliability-first snapshot API with per-chain caching and fallbacks.
+// Phase1 strict reliability snapshot (BTC / ETH / SOL only)
+// - Etherscan V2 gasoracle
+// - per-chain last_good cache only (NO mock fallback)
+// - NOTOK / invalid -> cached if exists else failed
+// - TTL to reduce calls
+// - always 200
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || null;
 
 const ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
-const TTL_GLOBAL_MS = 60_000;
+const TTL_GLOBAL_MS = 60_000; // snapshot endpoint global cache
 const DEFAULT_USD_TO_JPY = 150;
 
-let LAST_SNAPSHOT = null;
-let LAST_AT = 0;
-let LAST_PRICES = null;
-let LAST_GOOD_CHAINS = {};
-
+// per-chain TTL (live fetch interval)
 const CHAIN_TTL_MS = {
   btc: 60_000,
   eth: 60_000,
   sol: 60_000,
-  xrp: 120_000,
-  tron: 120_000,
-  default: 180_000,
+  default: 60_000,
 };
 
 const PRICE_ID_MAP = {
   BTC: "bitcoin",
   ETH: "ethereum",
   SOL: "solana",
-  ARB: "arbitrum",
-  OP: "optimism",
-  BASE: "base",
-  POLYGON: "polygon",
-  BSC: "binancecoin",
-  AVAX: "avalanche-2",
 };
 
-const FALLBACK_TOKEN_PRICE_USD = {
-  ETH: 1800,
-  ARB: 1.2,
-  OP: 1.2,
-  BASE: 1800,
-  POLYGON: 0.7,
-  BSC: 230,
-  AVAX: 30,
-};
-
-const FALLBACK_GAS = { safe: 10, propose: 12, fast: 15 };
+// ETH model
 const GAS_LIMIT = 21_000;
 
+// module-level caches (survive within warm lambda)
+let LAST_SNAPSHOT = null;
+let LAST_AT = 0;
+let LAST_PRICES = null;
+/**
+ * LAST_GOOD_CHAINS = {
+ *   btc: { data: <chainPayload>, at: <ms> },
+ *   eth: { ... },
+ *   sol: { ... }
+ * }
+ */
+let LAST_GOOD_CHAINS = {};
+
+// ---------- common ----------
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
-    headers: { "Accept": "application/json", ...(options.headers || {}) },
+    headers: { Accept: "application/json", ...(options.headers || {}) },
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -85,7 +82,7 @@ function calcJpy(amountUsd, rate) {
   return amountUsd * usdToJpy;
 }
 
-function baseChain(nowIso) {
+function baseFailedChain(nowIso, errorMessage = "") {
   return {
     feeUSD: null,
     feeJPY: null,
@@ -98,6 +95,7 @@ function baseChain(nowIso) {
       { label: "slow", feeUSD: null, feeJPY: null, speedSec: null },
     ],
     ok: false,
+    error: errorMessage ? errorMessage.slice(0, 200) : undefined,
   };
 }
 
@@ -109,8 +107,9 @@ function getChainTTL(chainId) {
   return CHAIN_TTL_MS[chainId] ?? CHAIN_TTL_MS.default;
 }
 
+// ---------- price (BTC/ETH/SOL only) ----------
 async function getPrices() {
-  const ids = Array.from(new Set(Object.values(PRICE_ID_MAP)));
+  const ids = Object.values(PRICE_ID_MAP);
 
   const params = new URLSearchParams({
     ids: ids.join(","),
@@ -143,43 +142,57 @@ async function getPrices() {
   }
 }
 
-async function fetchGasOracle() {
+// ---------- ETH gas oracle (Etherscan v2) ----------
+async function fetchGasOracleV2() {
   const params = new URLSearchParams({
     chainid: "1",
     module: "gastracker",
     action: "gasoracle",
   });
   if (ETHERSCAN_API_KEY) params.set("apikey", ETHERSCAN_API_KEY);
+
   const url = `${ETHERSCAN_V2_BASE}?${params.toString()}`;
   const data = await fetchJson(url);
+
   const r = data.result || {};
   if (data.status === "0" || data.message === "NOTOK") {
     throw new Error(`Gas oracle failed: ${data.message || data.result || "status 0"}`);
   }
+
   const propose = Number(r.ProposeGasPrice ?? r.proposeGasPrice);
   const fast = Number(r.FastGasPrice ?? r.fastGasPrice);
   const safe = Number(r.SafeGasPrice ?? r.safeGasPrice);
+
   const valid = [propose, fast, safe].every(v => Number.isFinite(v) && v > 0);
-  if (!valid) {
-    throw new Error("Invalid gas price values from Etherscan V2");
-  }
+  if (!valid) throw new Error("Invalid gas price values from Etherscan V2");
+
   return { propose, fast, safe };
 }
 
-function mkEthTier(label, gwei, speedSec, priceUsd, usdToJpy, gasLimit) {
+function mkEthTier(label, gwei, speedSec, priceUsd, usdToJpy) {
   const g = Number(gwei);
   const price = Number(priceUsd);
   const hasPrice = Number.isFinite(price) && price > 0;
-  const gasPriceEth = Number.isFinite(g) ? g * 1e-9 : null;
-  const feeEth = gasPriceEth !== null ? gasPriceEth * gasLimit : null;
-  const feeUSD = feeEth !== null && hasPrice ? feeEth * price : null;
-  const feeJPY = calcJpy(feeUSD, usdToJpy);
-  return { label, feeUSD, feeJPY, speedSec };
+
+  if (!Number.isFinite(g) || !hasPrice) {
+    return { label, feeUSD: null, feeJPY: null, speedSec };
+  }
+
+  const gasPriceEth = g * 1e-9;
+  const feeEth = gasPriceEth * GAS_LIMIT;
+  const feeUSD = feeEth * price;
+
+  return {
+    label,
+    feeUSD,
+    feeJPY: calcJpy(feeUSD, usdToJpy),
+    speedSec,
+  };
 }
 
+// ---------- BTC ----------
 async function buildBitcoin(ctx) {
-  const generatedAt = ctx.generatedAt;
-  const prices = ctx.prices;
+  const { generatedAt, prices } = ctx;
   const price = prices.BTC || {};
   const priceUsd = Number(price.usd);
   if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
@@ -208,65 +221,11 @@ async function buildBitcoin(ctx) {
     };
   });
 
-  const main = tiers.find(t => t.label === "standard") || tiers[0] || {};
-  const feeUSD = main.feeUSD;
-  const speedSec = main.speedSec;
-  if (!Number.isFinite(feeUSD) || !Number.isFinite(speedSec)) {
+  const main = tiers.find(t => t.label === "standard") || tiers[0];
+  if (!main || !Number.isFinite(main.feeUSD)) {
     throw new Error("Invalid BTC fee data");
   }
 
-  return {
-    feeUSD,
-    feeJPY: calcJpy(feeUSD, usdToJpy),
-    speedSec,
-    status: decideStatus(feeUSD, speedSec),
-    updated: generatedAt,
-    tiers,
-    ok: true,
-  };
-}
-
-async function fallbackBitcoin(ctx) {
-  const generatedAt = ctx.generatedAt;
-  const feeUSD = 0.15;
-  const feeJPY = calcJpy(feeUSD, DEFAULT_USD_TO_JPY);
-  const tiers = [
-    { label: "standard", feeUSD, feeJPY, speedSec: 30 * 60 },
-    { label: "fast", feeUSD, feeJPY, speedSec: 10 * 60 },
-    { label: "slow", feeUSD, feeJPY, speedSec: 60 * 60 },
-  ];
-  return {
-    feeUSD,
-    feeJPY,
-    speedSec: 30 * 60,
-    status: decideStatus(feeUSD, 30 * 60),
-    updated: generatedAt,
-    tiers,
-    ok: true,
-  };
-}
-
-async function buildSolana(ctx) {
-  const generatedAt = ctx.generatedAt;
-  const prices = ctx.prices;
-  const price = prices.SOL || {};
-  const priceUsd = Number(price.usd);
-  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
-    throw new Error("No SOL price");
-  }
-
-  const usdToJpy = calcUsdToJpyRate(price);
-  const LAMPORTS_PER_SIGNATURE = 5000;
-  const feeSol = LAMPORTS_PER_SIGNATURE / 1e9;
-  const feeUSD = feeSol * priceUsd;
-
-  const tiers = [
-    { label: "standard", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 10 },
-    { label: "fast", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 8 },
-    { label: "slow", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 20 },
-  ];
-
-  const main = tiers[0];
   return {
     feeUSD: main.feeUSD,
     feeJPY: calcJpy(main.feeUSD, usdToJpy),
@@ -278,82 +237,33 @@ async function buildSolana(ctx) {
   };
 }
 
-async function fallbackSolana(ctx) {
-  const generatedAt = ctx.generatedAt;
-  const feeUSD = 0.0006;
-  const feeJPY = calcJpy(feeUSD, DEFAULT_USD_TO_JPY);
-  const tiers = [
-    { label: "standard", feeUSD, feeJPY, speedSec: 10 },
-    { label: "fast", feeUSD, feeJPY, speedSec: 8 },
-    { label: "slow", feeUSD, feeJPY, speedSec: 20 },
-  ];
-  return {
-    feeUSD,
-    feeJPY,
-    speedSec: 10,
-    status: decideStatus(feeUSD, 10),
-    updated: generatedAt,
-    tiers,
-    ok: true,
-  };
-}
+// ---------- ETH ----------
+async function buildEthereum(ctx) {
+  const { generatedAt, prices, gasOracle } = ctx;
+  if (!gasOracle) throw new Error("No gas oracle available");
 
-function evmPrice(chainKey, prices) {
-  const upper = chainKey.toUpperCase();
-  if (upper === "BASE") return prices.ETH || {};
-  return prices[upper] || {};
-}
-
-function buildEvmTiers(gas, priceUsd, usdToJpy) {
-  return [
-    mkEthTier("standard", gas.propose, 120, priceUsd, usdToJpy, GAS_LIMIT),
-    mkEthTier("fast", gas.fast, 30, priceUsd, usdToJpy, GAS_LIMIT),
-    mkEthTier("slow", gas.safe, 300, priceUsd, usdToJpy, GAS_LIMIT),
-  ];
-}
-
-async function buildEvmChain(chainKey, ctx) {
-  const generatedAt = ctx.generatedAt;
-  const prices = ctx.prices;
-  const gas = ctx.gasOracle;
-  if (!gas) throw new Error("No gas oracle available");
-
-  const priceObj = evmPrice(chainKey, prices);
+  const priceObj = prices.ETH || {};
   const priceUsd = Number(priceObj.usd);
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+    throw new Error("No ETH price");
+  }
+
   const usdToJpy = calcUsdToJpyRate(priceObj);
 
-  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
-    throw new Error(`No ${chainKey} price`);
+  const tiers = [
+    mkEthTier("standard", gasOracle.propose, 120, priceUsd, usdToJpy),
+    mkEthTier("fast", gasOracle.fast, 30, priceUsd, usdToJpy),
+    mkEthTier("slow", gasOracle.safe, 300, priceUsd, usdToJpy),
+  ];
+
+  const main = tiers[0];
+  if (!main || !Number.isFinite(main.feeUSD)) {
+    throw new Error("Invalid ETH fee data");
   }
 
-  const tiers = buildEvmTiers(gas, priceUsd, usdToJpy);
-  const main = tiers[0];
-  const feeUSD = main.feeUSD;
-  const speedSec = main.speedSec;
-  if (!Number.isFinite(feeUSD) || !Number.isFinite(speedSec)) {
-    throw new Error(`Invalid ${chainKey} fee data`);
-  }
-
-  return {
-    feeUSD,
-    feeJPY: calcJpy(feeUSD, usdToJpy),
-    speedSec,
-    status: decideStatus(feeUSD, speedSec),
-    updated: generatedAt,
-    tiers,
-    ok: true,
-  };
-}
-
-async function fallbackEvmChain(chainKey, ctx) {
-  const generatedAt = ctx.generatedAt;
-  const priceUsd = FALLBACK_TOKEN_PRICE_USD[chainKey.toUpperCase()] || 1;
-  const usdToJpy = DEFAULT_USD_TO_JPY / 1; // convert using default rate if missing
-  const tiers = buildEvmTiers(FALLBACK_GAS, priceUsd, usdToJpy);
-  const main = tiers[0];
   return {
     feeUSD: main.feeUSD,
-    feeJPY: main.feeJPY,
+    feeJPY: calcJpy(main.feeUSD, usdToJpy),
     speedSec: main.speedSec,
     status: decideStatus(main.feeUSD, main.speedSec),
     updated: generatedAt,
@@ -362,10 +272,50 @@ async function fallbackEvmChain(chainKey, ctx) {
   };
 }
 
-async function resolveChain(chainId, builder, fallbackBuilder, ctx) {
-  const now = ctx.now;
+// ---------- SOL ----------
+async function buildSolana(ctx) {
+  const { generatedAt, prices } = ctx;
+  const priceObj = prices.SOL || {};
+  const priceUsd = Number(priceObj.usd);
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+    throw new Error("No SOL price");
+  }
+
+  const usdToJpy = calcUsdToJpyRate(priceObj);
+
+  const LAMPORTS_PER_SIGNATURE = 5000;
+  const feeSol = LAMPORTS_PER_SIGNATURE / 1e9;
+  const feeUSD = feeSol * priceUsd;
+
+  const tiers = [
+    { label: "standard", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 10 },
+    { label: "fast", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 8 },
+    { label: "slow", feeUSD, feeJPY: calcJpy(feeUSD, usdToJpy), speedSec: 20 },
+  ];
+
+  const main = tiers[0];
+  if (!main || !Number.isFinite(main.feeUSD)) {
+    throw new Error("Invalid SOL fee data");
+  }
+
+  return {
+    feeUSD: main.feeUSD,
+    feeJPY: calcJpy(main.feeUSD, usdToJpy),
+    speedSec: main.speedSec,
+    status: decideStatus(main.feeUSD, main.speedSec),
+    updated: generatedAt,
+    tiers,
+    ok: true,
+  };
+}
+
+// ---------- resolve with strict last_good only ----------
+async function resolveChain(chainId, builder, ctx) {
+  const { now, generatedAt } = ctx;
   const cached = LAST_GOOD_CHAINS[chainId];
   const ttl = getChainTTL(chainId);
+
+  // TTL hit -> cached
   if (cached && now - cached.at < ttl) {
     const staleSec = Math.floor((now - cached.at) / 1000);
     return chainWithSource(cached.data, "cached", staleSec);
@@ -373,35 +323,30 @@ async function resolveChain(chainId, builder, fallbackBuilder, ctx) {
 
   try {
     const data = await builder(ctx);
+
+    // live success -> store
     const payload = chainWithSource(data, "live", 0);
     LAST_GOOD_CHAINS[chainId] = { data: payload, at: now };
     return payload;
   } catch (e) {
     console.error(`[snapshot] ${chainId} failed:`, e.message || e);
+
+    // strict last_good fallback only
     if (cached) {
       const staleSec = Math.floor((now - cached.at) / 1000);
       return chainWithSource(cached.data, "cached", staleSec);
     }
-    const fallback = await fallbackBuilder(ctx);
-    const payload = chainWithSource(fallback, "fallback", 0);
-    LAST_GOOD_CHAINS[chainId] = { data: payload, at: now };
-    return payload;
+
+    // no cached -> failed
+    return chainWithSource(
+      baseFailedChain(generatedAt, e.message || "error"),
+      "failed",
+      0
+    );
   }
 }
 
-async function runPromisePool(tasks, limit = 2) {
-  const results = {};
-  let index = 0;
-  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
-    while (index < tasks.length) {
-      const current = tasks[index++];
-      results[current.key] = await current.fn();
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
+// ---------- handler ----------
 module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
@@ -410,6 +355,8 @@ module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const now = Date.now();
+
+  // global TTL cache (reduces total calls)
   if (LAST_SNAPSHOT && now - LAST_AT < TTL_GLOBAL_MS) {
     return res.status(200).json(LAST_SNAPSHOT);
   }
@@ -418,49 +365,43 @@ module.exports = async function (req, res) {
 
   try {
     const prices = await getPrices();
+
     let gasOracle = null;
     try {
-      gasOracle = await fetchGasOracle();
+      gasOracle = await fetchGasOracleV2();
     } catch (e) {
       console.error("[snapshot] gas oracle fetch failed:", e.message || e);
+      // keep null -> ETH resolveChain will fallback to last_good / failed
     }
 
     const ctx = { now, generatedAt, prices, gasOracle };
 
-    const independentTasks = [
-      { key: "btc", fn: () => resolveChain("btc", buildBitcoin, fallbackBitcoin, ctx) },
-      { key: "sol", fn: () => resolveChain("sol", buildSolana, fallbackSolana, ctx) },
-    ];
-
-    const independentResults = await runPromisePool(independentTasks, 2);
-
-    const evmChains = ["eth", "arb", "op", "base", "polygon", "bsc", "avax"];
-    const evmResults = {};
-    for (const key of evmChains) {
-      evmResults[key] = await resolveChain(key, c => buildEvmChain(key, c), c => fallbackEvmChain(key, c), ctx);
-    }
-
     const chains = {
-      ...independentResults,
-      ...evmResults,
+      btc: await resolveChain("btc", buildBitcoin, ctx),
+      eth: await resolveChain("eth", buildEthereum, ctx),
+      sol: await resolveChain("sol", buildSolana, ctx),
     };
 
     const payload = { generatedAt, chains };
+
     LAST_SNAPSHOT = payload;
     LAST_AT = now;
+
     return res.status(200).json(payload);
   } catch (e) {
     console.error("[snapshot] fatal error:", e);
-    const chainKeys = ["btc", "eth", "sol", "arb", "op", "base", "polygon", "bsc", "avax"];
-    const chains = chainKeys.reduce((acc, key) => {
-      const cached = LAST_GOOD_CHAINS[key];
-      const fallback = cached?.data || baseChain(generatedAt);
-      acc[key] = chainWithSource(fallback, cached ? "cached" : "fallback", cached ? Math.floor((now - cached.at) / 1000) : 0);
-      return acc;
-    }, {});
+
+    // even on fatal, never 500
+    const chains = {
+      btc: await resolveChain("btc", buildBitcoin, { now, generatedAt, prices: LAST_PRICES || {}, gasOracle: null }),
+      eth: await resolveChain("eth", buildEthereum, { now, generatedAt, prices: LAST_PRICES || {}, gasOracle: null }),
+      sol: await resolveChain("sol", buildSolana, { now, generatedAt, prices: LAST_PRICES || {}, gasOracle: null }),
+    };
+
     const payload = { generatedAt, chains };
     LAST_SNAPSHOT = LAST_SNAPSHOT || payload;
     LAST_AT = LAST_AT || now;
+
     return res.status(200).json(payload);
   }
 };
