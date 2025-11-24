@@ -4,10 +4,16 @@ async function getAllFeeCandidates(chains) {
   const result = {};
   for (const c of chains) {
     try {
-      const fn = snapshot.__TEST_getFeeCandidates;
-      result[c] = fn ? await fn(c) : [];
+      const fn = snapshot.__TEST_buildChain;
+      if (!fn) {
+        result[c] = [];
+        continue;
+      }
+      const prices = await snapshot.__TEST_prices?.();
+      const { candidates } = await fn(c, prices || {}, null);
+      result[c] = candidates || [];
     } catch (e) {
-      result[c] = [{ provider: 'internal', type: 'error', ok: false, value: null, error: e.message }];
+      result[c] = [{ key: `${c}:error`, provider: 'internal', ok: false, valueUSD: null, valueNative: null, reasonIfInvalid: e.message }];
     }
   }
   return result;
@@ -17,10 +23,10 @@ async function getAllSpeedCandidates(chains) {
   const result = {};
   for (const c of chains) {
     try {
-      const fn = snapshot.__TEST_getSpeedCandidates;
+      const fn = snapshot.__TEST_buildSpeed;
       result[c] = fn ? await fn(c) : [];
     } catch (e) {
-      result[c] = [{ provider: 'internal', type: 'error', ok: false, value: null, error: e.message }];
+      result[c] = [{ key: `${c}:error`, provider: 'internal', ok: false, value: null, reasonIfInvalid: e.message }];
     }
   }
   return result;
