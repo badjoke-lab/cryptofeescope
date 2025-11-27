@@ -1,29 +1,26 @@
-# 🧩 **1. spec.md　— CryptoFeeScope v2 完全仕様**
+## **spec.md — CryptoFeeScope v2 Fee Logic Rebuild Specification (for Codex)**
 
-※ *これは Codex が最終的に作るべきロジックの仕様。
-通常ChatGPTではなく Codex に最適化した書き方。*
+### 🎯 **Objective**
 
----
+Rebuild the **entire fee estimation system** for CryptoFeeScope using:
 
-# CryptoFeeScope v2 — Fee Logic Rebuild Specification
+* **Real-time multi-source API aggregation**
+* **Strict fiat (USD) validity-range enforcement**
+* **Timestamp freshness checks**
+* **Automatic fallback / retry logic**
+* **Deterministic unit tests**
 
-*(for Codex)*
+The **ONLY requirement** for correctness is:
 
-## 🎯 **Objective**
-
-Rebuild the entire fee estimation logic for all supported blockchains using **real-time API aggregation**, **fiat conversion validation**, and **automatic abnormal-value filtering**, producing **correct feeUSD values** guaranteed to be within realistic ranges for each chain.
-
-Goal:
-
-* **The final feeUSD must be correct.**
-* Middle calculations (native gas, byte size, etc.) are irrelevant as long as feeUSD accuracy is maintained.
+> **Final `feeUSD` MUST be within realistic chain ranges.**
+> Middle values (gas price, gas limit, sat/vB, lamports, etc.) are irrelevant unless they produce correct final USD fees.
 
 ---
 
-## 🟦 **Supported Chains**
+## **Supported Chains**
 
 * Bitcoin
-* Ethereum (L1)
+* Ethereum
 * BNB Smart Chain (BSC)
 * Polygon PoS
 * Avalanche C-Chain
@@ -35,44 +32,86 @@ Goal:
 
 ---
 
-## 🟧 **Core Requirements**
+## **Core Requirements**
 
-### 1. Multi-source Real-time API Fetch
+### **1. Multi-source Gas/Fee API Fetch**
 
-For each chain:
+Each chain must use **2–4 independent data sources**, such as:
 
-* At least **2–4 independent API sources**
-* Fetch gasPrice / fee / required parameters
-* Attach timestamp
+* Bitcoin: mempool.space / blockstream / blockchair
+* Ethereum/EVM: Etherscan Gas API / Blocknative / public RPC / Ankr
+* Solana: `getFees` RPC
+* XRP: XRPL ledger API
+* L2s: alchemy / infura / etherscan-l2 endpoints
+
+Rules:
+
+* Attach timestamp to each fetched value
 * Reject values older than **3 hours**
-* Reject zero or near-zero gasPrice values
-* Combine values using **median** or trimmed mean
+* Reject zero or near-zero gasPrice (EVM)
+* Reject extreme outliers using **median**
 
-### 2. Native Fee Calculation
+---
 
-Codex must implement proper chain-specific fee models：
+### **2. Native Fee Calculation**
 
-* BTC: vBytes × sat/vB
-* ETH/EVM: gasLimit × gasPrice
-* L2: L2 gas + L1 data gas
-* Solana: lamports
-* XRP: drops
+Codex must implement correct chain-specific fee formulas:
 
-### 3. Fiat Conversion
+#### Bitcoin
 
 ```
-feeUSD = feeNative × priceUSD
+feeNative = vBytes * satPerVbyte
 ```
 
-priceUSD must be:
+#### Ethereum / EVM
 
-* From CoinGecko + CryptoCompare + Binance API fallback
-* No null allowed
-* Must retry on error
+```
+feeNative = gasLimit * gasPrice (in ETH)
+```
 
-### 4. USD Validity Ranges (critical)
+#### L2 (Arbitrum / Optimism / Base)
 
-Codex must enforce:
+```
+feeNative = (L2GasLimit * L2GasPrice) + (L1DataGas * L1GasPrice)
+```
+
+#### Solana
+
+```
+feeNative = lamports / 1e9
+```
+
+#### XRP
+
+```
+feeNative = drops / 1e6
+```
+
+---
+
+### **3. Fiat Conversion**
+
+```
+feeUSD = feeNative * priceUSD
+```
+
+Fiat price must come from:
+
+* CoinGecko
+* CryptoCompare
+* Binance API (fallback)
+
+Rules:
+
+* Must retry on failure
+* Null forbidden
+* Must produce consistent output
+
+---
+
+### **4. USD Validity Ranges**
+
+The system must enforce:
 
 | Chain     | minUSD   | maxUSD |
 | --------- | -------- | ------ |
@@ -87,25 +126,39 @@ Codex must enforce:
 | Optimism  | 0.003    | 0.5    |
 | Base      | 0.003    | 0.5    |
 
-### 5. USD Outlier Filter
+---
 
-If feeUSD is outside the allowed range:
+### **5. Outlier Filter Rules**
 
-* Retry API
-* Replace with fallback source
-* Recalculate
-* If still out of range:
-  → Use **safe median** of fallback list
-  → Mark as `"status": "estimated"`
+If `feeUSD` is outside its allowed range:
 
-### 6. Speed Estimation
+1. Retry API
+2. Use fallback providers
+3. Recalculate
+4. If still invalid →
 
-* BTC: based on mempool feerate thresholds
-* ETH/EVM: 30 sec / 2 min / 5 min tiers
-* L2: finality = 5〜60 sec
-* Sol/XRP: static (2〜6 sec / 4 sec)
+   * Use **safe median** of fallback results
+   * Set `"status": "estimated"`
 
-### 7. Output Format
+`feeUSD` **must never remain invalid**.
+
+---
+
+### **6. Transaction Speed (speedSec)**
+
+Codex must implement realistic estimates:
+
+* **BTC**: based on mempool fee tiers
+* **ETH/EVM**: 30s / 2m / 5m
+* **L2**: 5–60s finality
+* **Solana**: 2–6s
+* **XRP**: ~4s
+
+Accuracy within ±30% is acceptable.
+
+---
+
+### **7. Output Schema**
 
 Codex must output:
 
@@ -120,14 +173,16 @@ Codex must output:
 }
 ```
 
-### 8. Tests (required)
-
-Codex generates tests to verify:
-
-* priceUSD != null
-* feeUSD within allowed range
-* API timestamp <= 3 hours
-* native fee calculation not zero
-
 ---
 
+### **8. Tests (Required)**
+
+Codex must generate full unit tests verifying:
+
+* priceUSD ≠ null
+* feeUSD within allowed range
+* timestamp freshness
+* native fee not zero
+* snapshot endpoint returns valid shape
+
+---
