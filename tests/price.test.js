@@ -7,6 +7,7 @@ async function testMedianPrice() {
     { match: 'coingecko', response: { bitcoin: { usd: 100 } } },
     { match: 'cryptocompare', response: { USD: 300 } },
     { match: 'binance', response: { price: 200 } },
+    { match: 'coinbase', response: { data: { amount: '200' } } },
   ]);
   const original = global.fetch;
   global.fetch = mock;
