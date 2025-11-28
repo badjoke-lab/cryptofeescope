@@ -22,6 +22,7 @@ const mockFetch = createMockFetch([
   { match: 'coingecko', response: url => ({ [Object.keys(PRICE_MAP).find(k => url.includes(k))]: { usd: priceFromUrl(url) } }) },
   { match: 'cryptocompare', response: url => ({ USD: priceFromUrl(url) * 1.02 }) },
   { match: 'binance', response: url => ({ price: priceFromUrl(url) * 0.98 }) },
+  { match: 'coinbase', response: url => ({ data: { amount: `${priceFromUrl(url) * 1.01}` } }) },
   { match: 'mempool.space', response: { fastestFee: 100, halfHourFee: 90 } },
   { match: 'blockstream', response: { 1: 110, 2: 100 } },
   { match: 'blockchair', response: { data: { suggested_transaction_fee_per_byte_sat: 120 } } },

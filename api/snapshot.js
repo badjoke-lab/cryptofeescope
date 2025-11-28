@@ -10,12 +10,15 @@ const { calcSpeed } = require('../lib/calc/calcSpeed');
 const { median } = require('../lib/utils/median');
 
 async function getPrice(symbol) {
-  try {
-    return await fetchPriceUSD(symbol);
-  } catch (e) {
-    // fallback minimal valid price to avoid nulls
-    return { priceUSD: 1, updated: new Date().toISOString(), estimated: true };
+  let lastError = null;
+  for (let i = 0; i < 2; i++) {
+    try {
+      return await fetchPriceUSD(symbol);
+    } catch (e) {
+      lastError = e;
+    }
   }
+  throw lastError || new Error(`price unavailable for ${symbol}`);
 }
 
 async function getGasCandidates(chainKey, l1GasPriceGwei) {
