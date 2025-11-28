@@ -10,40 +10,18 @@ const { calcSpeed } = require('../lib/calc/calcSpeed');
 const { median } = require('../lib/utils/median');
 
 async function getPrice(symbol) {
-  let lastError = null;
-  for (let i = 0; i < 2; i++) {
-    try {
-      return await fetchPriceUSD(symbol);
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError || new Error(`price unavailable for ${symbol}`);
+  const result = await fetchPriceUSD(symbol);
+  return result;
 }
 
 async function getGasCandidates(chainKey, l1GasPriceGwei) {
   const chain = chains[chainKey];
-  let candidates = [];
-  if (chain.type === 'btc') candidates = await fetchBtcGas(chain);
-  else if (chain.type === 'evm') candidates = await fetchEvmGas(chain);
-  else if (chain.type === 'l2') candidates = await fetchL2Gas(chain, l1GasPriceGwei);
-  else if (chain.type === 'sol') candidates = await fetchSolanaGas(chain);
-  else if (chain.type === 'xrp') candidates = await fetchXrpGas(chain);
-  else throw new Error(`unsupported chain ${chainKey}`);
-
-  if (!candidates.length) {
-    const now = new Date().toISOString();
-    if (chain.type === 'btc') candidates.push({ feeNative: (50 * 140) / 1e8, satPerVbyte: 50, updated: now, provider: 'fallback' });
-    else if (chain.type === 'evm') candidates.push({ feeNative: (20 / 1e9) * chain.gasLimit, gasPriceGwei: 20, updated: now, provider: 'fallback' });
-    else if (chain.type === 'l2') {
-      const l1 = l1GasPriceGwei || 30;
-      const l2Fee = (0.25 / 1e9) * (chain.gasLimitL2 || 65000);
-      const l1Fee = (l1 / 1e9) * (chain.l1DataGas || 30000);
-      candidates.push({ feeNative: l1Fee + l2Fee, gasPriceGwei: 0.25, l1GasPriceGwei: l1, updated: now, provider: 'fallback' });
-    } else if (chain.type === 'sol') candidates.push({ feeNative: 5000 / 1e9, lamports: 5000, updated: now, provider: 'fallback' });
-    else if (chain.type === 'xrp') candidates.push({ feeNative: 12 / 1e6, drops: 12, updated: now, provider: 'fallback' });
-  }
-  return candidates;
+  if (chain.type === 'btc') return await fetchBtcGas(chain);
+  if (chain.type === 'evm') return await fetchEvmGas(chain);
+  if (chain.type === 'l2') return await fetchL2Gas(chain, l1GasPriceGwei);
+  if (chain.type === 'sol') return await fetchSolanaGas(chain);
+  if (chain.type === 'xrp') return await fetchXrpGas(chain);
+  throw new Error(`unsupported chain ${chainKey}`);
 }
 
 async function getL1GasPriceGwei() {
@@ -58,14 +36,15 @@ async function buildChain(chainKey, l1GasPriceGwei) {
   const price = await getPrice(chain.symbol);
   const gasCandidates = await getGasCandidates(chainKey, l1GasPriceGwei);
   const validated = validateFee(chainKey, price.priceUSD, gasCandidates);
-  const speedSec = calcSpeed(chainKey, validated.primary || gasCandidates[0]);
+  const speedSec = validated.primary ? calcSpeed(chainKey, validated.primary || gasCandidates[0]) : null;
+  const status = price.status === 'api-failed' || validated.status === 'api-failed' ? 'api-failed' : 'ok';
   return {
     chain: chainKey,
-    feeNative: Number(validated.feeNative),
-    feeUSD: Number(validated.feeUSD),
-    priceUSD: Number(price.priceUSD),
+    feeNative: validated.feeNative != null ? Number(validated.feeNative) : null,
+    feeUSD: validated.feeUSD != null ? Number(validated.feeUSD) : null,
+    priceUSD: price.priceUSD != null ? Number(price.priceUSD) : null,
     speedSec,
-    status: validated.status,
+    status,
     updated: validated.updated,
   };
 }

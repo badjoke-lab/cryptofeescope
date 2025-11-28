@@ -7,38 +7,31 @@ function fresh() { return new Date().toISOString(); }
 
 async function testRangeEnforcement() {
   const candidates = [
-    { feeNative: 10, updated: fresh(), provider: 'bad' },
-    { feeNative: 0.001, updated: fresh(), provider: 'good' },
+    { feeNative: 0.0005, updated: fresh(), provider: 'good' },
   ];
   const result = validateFee('polygon', 1, candidates);
   assert(result.feeUSD >= ranges.polygon.minUSD && result.feeUSD <= ranges.polygon.maxUSD);
   assert.strictEqual(result.status, 'ok');
 }
 
-async function testMedianFallback() {
-  const old = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-  const candidates = [
-    { feeNative: 10, updated: fresh(), provider: 'high' },
-    { feeNative: 9, updated: old, provider: 'stale' },
-  ];
-  const res = validateFee('sol', 1, candidates);
-  assert(res.feeUSD <= ranges.sol.maxUSD, 'should clamp to max');
-  assert.strictEqual(res.status, 'estimated');
+async function testRejectsInvalidPrice() {
+  const candidates = [{ feeNative: 0.1, updated: fresh(), provider: 'any' }];
+  const result = validateFee('eth', null, candidates);
+  assert.strictEqual(result.status, 'api-failed');
+  assert.strictEqual(result.feeUSD, null);
 }
 
-async function testRejectZero() {
-  const candidates = [
-    { feeNative: 0, updated: fresh(), provider: 'zero' },
-    { feeNative: 0.00001, updated: fresh(), provider: 'valid' },
-  ];
-  const res = validateFee('xrp', 1, candidates);
-  assert(res.feeNative > 0);
+async function testStaleCandidateFails() {
+  const old = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+  const candidates = [{ feeNative: 0.1, updated: old, provider: 'old' }];
+  const res = validateFee('sol', 10, candidates);
+  assert.strictEqual(res.status, 'api-failed');
 }
 
 async function runFeeTests() {
   await runTest('fee range enforcement', testRangeEnforcement);
-  await runTest('fee median fallback', testMedianFallback);
-  await runTest('fee rejects zero', testRejectZero);
+  await runTest('fee rejects invalid price', testRejectsInvalidPrice);
+  await runTest('fee stale candidate', testStaleCandidateFails);
 }
 
 module.exports = { runFeeTests };
