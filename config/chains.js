@@ -17,6 +17,7 @@ module.exports = {
     rpc: [
       'https://rpc.ankr.com/eth',
       'https://ethereum-rpc.publicnode.com',
+      'https://cloudflare-eth.com',
     ],
     etherscan: 'https://api.etherscan.io/api?module=gastracker&action=gasoracle',
   },
@@ -29,6 +30,8 @@ module.exports = {
     rpc: [
       'https://bsc-dataseed.binance.org',
       'https://bsc-rpc.publicnode.com',
+      'https://rpc.ankr.com/bsc',
+      'https://bsc-mainnet.public.blastapi.io',
     ],
     etherscan: 'https://api.bscscan.com/api?module=gastracker&action=gasoracle',
   },
@@ -41,6 +44,8 @@ module.exports = {
     rpc: [
       'https://polygon-rpc.com',
       'https://polygon-bor.publicnode.com',
+      'https://rpc.ankr.com/polygon',
+      'https://rpc-mainnet.matic.quiknode.pro',
     ],
     etherscan: 'https://api.polygonscan.com/api?module=gastracker&action=gasoracle',
   },
@@ -53,6 +58,8 @@ module.exports = {
     rpc: [
       'https://api.avax.network/ext/bc/C/rpc',
       'https://avalanche-c-chain.publicnode.com',
+      'https://rpc.ankr.com/avalanche',
+      'https://ava-mainnet.public.blastapi.io/ext/bc/C/rpc',
     ],
     etherscan: 'https://api.snowtrace.io/api?module=gastracker&action=gasoracle',
   },
@@ -64,6 +71,7 @@ module.exports = {
     rpc: [
       'https://api.mainnet-beta.solana.com',
       'https://rpc.ankr.com/solana',
+      'https://solana-mainnet.g.alchemy.com/v2/demo',
     ],
   },
   xrp: {
@@ -83,6 +91,7 @@ module.exports = {
     rpc: [
       'https://arb1.arbitrum.io/rpc',
       'https://arbitrum-one.publicnode.com',
+      'https://rpc.ankr.com/arbitrum',
     ],
   },
   op: {
@@ -95,6 +104,7 @@ module.exports = {
     rpc: [
       'https://mainnet.optimism.io',
       'https://optimism-rpc.publicnode.com',
+      'https://rpc.ankr.com/optimism',
     ],
   },
   base: {
@@ -107,6 +117,7 @@ module.exports = {
     rpc: [
       'https://mainnet.base.org',
       'https://base-rpc.publicnode.com',
+      'https://rpc.ankr.com/base',
     ],
   },
 };

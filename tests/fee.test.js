@@ -5,20 +5,18 @@ const { runTest } = require('./helpers');
 
 function fresh() { return new Date().toISOString(); }
 
-async function testRangeEnforcement() {
-  const candidates = [
-    { feeNative: 0.0005, updated: fresh(), provider: 'good' },
-  ];
-  const result = validateFee('polygon', 1, candidates);
-  assert(result.feeUSD >= ranges.polygon.minUSD && result.feeUSD <= ranges.polygon.maxUSD);
-  assert.strictEqual(result.status, 'ok');
+async function testValidCandidateAccepted() {
+  const candidates = [{ feeNative: 0.002, provider: 'ok', updated: fresh() }];
+  const res = validateFee('eth', 2000, candidates);
+  assert.strictEqual(res.status, 'ok');
+  assert(res.feeUSD > ranges.eth.minUSD && res.feeUSD < ranges.eth.maxUSD);
 }
 
-async function testRejectsInvalidPrice() {
-  const candidates = [{ feeNative: 0.1, updated: fresh(), provider: 'any' }];
-  const result = validateFee('eth', null, candidates);
-  assert.strictEqual(result.status, 'api-failed');
-  assert.strictEqual(result.feeUSD, null);
+async function testOutOfRangeRejected() {
+  const candidates = [{ feeNative: 10, provider: 'bad', updated: fresh() }];
+  const res = validateFee('bsc', 100, candidates);
+  assert.strictEqual(res.status, 'api-failed');
+  assert.strictEqual(res.feeUSD, null);
 }
 
 async function testStaleCandidateFails() {
@@ -29,8 +27,8 @@ async function testStaleCandidateFails() {
 }
 
 async function runFeeTests() {
-  await runTest('fee range enforcement', testRangeEnforcement);
-  await runTest('fee rejects invalid price', testRejectsInvalidPrice);
+  await runTest('fee accepts valid candidate', testValidCandidateAccepted);
+  await runTest('fee rejects out of range', testOutOfRangeRejected);
   await runTest('fee stale candidate', testStaleCandidateFails);
 }
 

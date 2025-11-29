@@ -1,6 +1,6 @@
 const assert = require('assert');
 const { fetchPriceUSD } = require('../lib/fetchPrice/price');
-const { createMockFetch, runTest } = require('./helpers');
+const { createMockFetch, runTest, jsonResponse } = require('./helpers');
 
 async function testPrimaryPrice() {
   const mock = createMockFetch([
@@ -19,24 +19,29 @@ async function testPrimaryPrice() {
   }
 }
 
-async function testFallbackOrder() {
+async function testDeepFallback() {
   const mock = createMockFetch([
     { match: 'coingecko', response: () => { throw new Error('down'); } },
-    { match: 'cryptocompare', response: { USD: 200 } },
+    { match: 'cryptocompare', response: { USD: 0 } },
+    { match: 'binance', response: { price: '0' } },
+    { match: 'kucoin', response: { data: { price: '0' } } },
+    { match: 'kraken', response: { result: { XXBTZUSD: { c: ['0'] } } } },
+    { match: 'coinbase', response: jsonResponse({ data: { amount: '0' } }) },
+    { match: 'okx', response: { data: [{ last: '250' }] } },
   ]);
   const original = global.fetch;
   global.fetch = mock;
   try {
-    const res = await fetchPriceUSD('ETH');
-    assert.strictEqual(res.priceUSD, 200);
-    assert.strictEqual(res.source, 'cryptocompare');
+    const res = await fetchPriceUSD('BTC');
+    assert.strictEqual(res.priceUSD, 250);
+    assert.strictEqual(res.source, 'okx');
   } finally {
     global.fetch = original;
   }
 }
 
 async function testAllFail() {
-  const mock = createMockFetch([]);
+  const mock = createMockFetch([{ match: () => true, response: () => { throw new Error('fail'); } }]);
   const original = global.fetch;
   global.fetch = mock;
   try {
@@ -50,7 +55,7 @@ async function testAllFail() {
 
 async function runPriceTests() {
   await runTest('price primary source', testPrimaryPrice);
-  await runTest('price fallback order', testFallbackOrder);
+  await runTest('price deep fallback', testDeepFallback);
   await runTest('price all fail', testAllFail);
 }
 
