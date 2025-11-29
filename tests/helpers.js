@@ -1,5 +1,14 @@
 const assert = require('assert');
 
+function jsonResponse(payload) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  };
+}
+
 function createMockFetch(routes) {
   return async function mockFetch(url, options = {}) {
     const entry = routes.find(r => (typeof r.match === 'function' ? r.match(url, options) : url.includes(r.match)));
@@ -7,12 +16,8 @@ function createMockFetch(routes) {
       throw new Error(`Unmocked fetch for ${url}`);
     }
     const payload = typeof entry.response === 'function' ? entry.response(url, options) : entry.response;
-    return {
-      ok: true,
-      status: 200,
-      json: async () => payload,
-      text: async () => JSON.stringify(payload),
-    };
+    if (payload && payload.ok !== undefined && payload.json) return payload;
+    return jsonResponse(payload);
   };
 }
 
@@ -33,4 +38,4 @@ function assertRange(value, min, max, msg) {
   assert(value <= max, `${msg || 'value'} above max`);
 }
 
-module.exports = { createMockFetch, runTest, assertRange };
+module.exports = { createMockFetch, runTest, assertRange, jsonResponse };

@@ -7,37 +7,33 @@ const { fetchSolanaGas } = require('../lib/fetchGas/solana');
 const { fetchXrpGas } = require('../lib/fetchGas/xrp');
 const { validateFee } = require('../lib/validate/validateFee');
 const { calcSpeed } = require('../lib/calc/calcSpeed');
-const { median } = require('../lib/utils/median');
 
 async function getPrice(symbol) {
-  const result = await fetchPriceUSD(symbol);
-  return result;
+  return fetchPriceUSD(symbol);
 }
 
-async function getGasCandidates(chainKey, l1GasPriceGwei) {
+async function getPrices() {
+  const symbols = [...new Set(Object.values(chains).map(c => c.symbol))];
+  const entries = await Promise.all(symbols.map(async sym => [sym, await getPrice(sym)]));
+  return Object.fromEntries(entries);
+}
+
+async function getGasCandidates(chain) {
+  if (chain.type === 'btc') return fetchBtcGas(chain);
+  if (chain.type === 'evm') return fetchEvmGas(chain);
+  if (chain.type === 'l2') return fetchL2Gas(chain);
+  if (chain.type === 'sol') return fetchSolanaGas(chain);
+  if (chain.type === 'xrp') return fetchXrpGas(chain);
+  return [];
+}
+
+async function buildChain(chainKey, prices) {
   const chain = chains[chainKey];
-  if (chain.type === 'btc') return await fetchBtcGas(chain);
-  if (chain.type === 'evm') return await fetchEvmGas(chain);
-  if (chain.type === 'l2') return await fetchL2Gas(chain, l1GasPriceGwei);
-  if (chain.type === 'sol') return await fetchSolanaGas(chain);
-  if (chain.type === 'xrp') return await fetchXrpGas(chain);
-  throw new Error(`unsupported chain ${chainKey}`);
-}
-
-async function getL1GasPriceGwei() {
-  const ethChain = chains.eth;
-  const candidates = await fetchEvmGas(ethChain);
-  const values = candidates.map(c => c.gasPriceGwei).filter(v => Number.isFinite(v));
-  return median(values);
-}
-
-async function buildChain(chainKey, l1GasPriceGwei) {
-  const chain = chains[chainKey];
-  const price = await getPrice(chain.symbol);
-  const gasCandidates = await getGasCandidates(chainKey, l1GasPriceGwei);
+  const price = prices[chain.symbol] || { priceUSD: null, status: 'api-failed', updated: new Date().toISOString() };
+  const gasCandidates = await getGasCandidates(chain);
   const validated = validateFee(chainKey, price.priceUSD, gasCandidates);
-  const speedSec = validated.primary ? calcSpeed(chainKey, validated.primary || gasCandidates[0]) : null;
-  const status = price.status === 'api-failed' || validated.status === 'api-failed' ? 'api-failed' : 'ok';
+  const speedSec = validated.primary ? calcSpeed(chainKey, validated.primary) : null;
+  const status = price.status === 'ok' && validated.status === 'ok' ? 'ok' : 'api-failed';
   return {
     chain: chainKey,
     feeNative: validated.feeNative != null ? Number(validated.feeNative) : null,
@@ -51,10 +47,10 @@ async function buildChain(chainKey, l1GasPriceGwei) {
 
 async function generateSnapshot() {
   const generatedAt = new Date().toISOString();
-  const l1GasPriceGwei = await getL1GasPriceGwei().catch(() => null);
+  const prices = await getPrices();
   const entries = await Promise.all(
     Object.keys(chains).map(async key => {
-      const entry = await buildChain(key, l1GasPriceGwei);
+      const entry = await buildChain(key, prices);
       return [key, entry];
     })
   );
@@ -76,4 +72,4 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.generateSnapshot = generateSnapshot;
-module.exports.__TESTING__ = { buildChain, getGasCandidates, getPrice, getL1GasPriceGwei };
+module.exports.__TESTING__ = { buildChain, getGasCandidates, getPrice, getPrices };
