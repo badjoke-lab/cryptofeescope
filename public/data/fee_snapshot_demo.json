@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2024-06-01T12:00:00.000Z",
+  "vsCurrencies": ["usd", "jpy"],
+  "chains": {
+    "btc": {
+      "label": "Bitcoin",
+      "feeUSD": 1.86,
+      "feeJPY": 279.0,
+      "speedSec": 600,
+      "status": "normal",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.00003,
+        "symbol": "BTC"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 1.86,
+          "feeJPY": 279.0
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "bitcoin"
+        }
+      }
+    },
+    "eth": {
+      "label": "Ethereum",
+      "feeUSD": 0.98,
+      "feeJPY": 151.2,
+      "speedSec": 30,
+      "status": "normal",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.000315,
+        "symbol": "ETH"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.98,
+          "feeJPY": 151.2
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "ethereum"
+        }
+      }
+    },
+    "bsc": {
+      "label": "BNB Smart Chain",
+      "feeUSD": 0.042,
+      "feeJPY": 6.3,
+      "speedSec": 5,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.000105,
+        "symbol": "BNB"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.042,
+          "feeJPY": 6.3
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "binancecoin"
+        }
+      }
+    },
+    "sol": {
+      "label": "Solana",
+      "feeUSD": 0.00075,
+      "feeJPY": 0.115,
+      "speedSec": 10,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.000005,
+        "symbol": "SOL"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.00075,
+          "feeJPY": 0.115
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "solana"
+        }
+      }
+    },
+    "tron": {
+      "label": "Tron",
+      "feeUSD": 0.012,
+      "feeJPY": 1.8,
+      "speedSec": 5,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.1,
+        "symbol": "TRX"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.012,
+          "feeJPY": 1.8
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "tron"
+        }
+      }
+    },
+    "avax": {
+      "label": "Avalanche C-Chain",
+      "feeUSD": 0.035,
+      "feeJPY": 5.2,
+      "speedSec": 15,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.001,
+        "symbol": "AVAX"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.035,
+          "feeJPY": 5.2
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "avalanche-2"
+        }
+      }
+    },
+    "xrp": {
+      "label": "XRP Ledger",
+      "feeUSD": 0.0000055,
+      "feeJPY": 0.00085,
+      "speedSec": 5,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.00001,
+        "symbol": "XRP"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.0000055,
+          "feeJPY": 0.00085
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "ripple"
+        }
+      }
+    },
+    "arbitrum": {
+      "label": "Arbitrum One",
+      "feeUSD": 0.11,
+      "feeJPY": 17.0,
+      "speedSec": 15,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.1,
+        "symbol": "ARB"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.11,
+          "feeJPY": 17.0
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "arbitrum"
+        }
+      }
+    },
+    "optimism": {
+      "label": "Optimism",
+      "feeUSD": 0.2,
+      "feeJPY": 30.0,
+      "speedSec": 15,
+      "status": "fast",
+      "updated": "2024-06-01T12:00:00.000Z",
+      "native": {
+        "amount": 0.1,
+        "symbol": "OP"
+      },
+      "tiers": [
+        {
+          "label": "standard",
+          "feeUSD": 0.2,
+          "feeJPY": 30.0
+        }
+      ],
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "optimism"
+        }
+      }
+    }
+  }
+}

@@ -45,13 +45,13 @@ const FIAT_CONFIG = {
 const CHAINS = [
   { id: 'btc', name: 'Bitcoin (L1)', ticker: 'BTC', family: 'bitcoin' },
   { id: 'eth', name: 'Ethereum (L1)', ticker: 'ETH', family: 'evm' },
-  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
-  { id: 'arb', name: 'Arbitrum (L2 on ETH)', ticker: 'ARB', family: 'evm' },
-  { id: 'op',  name: 'Optimism (L2 on ETH)', ticker: 'OP',  family: 'evm' },
-  { id: 'base', name: 'Base (L2 on ETH)', ticker: 'BASE', family: 'evm' },
-  { id: 'polygon', name: 'Polygon', ticker: 'MATIC', family: 'evm' },
   { id: 'bsc', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
+  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
+  { id: 'tron', name: 'Tron', ticker: 'TRX', family: 'evm' },
   { id: 'avax', name: 'Avalanche C-Chain', ticker: 'AVAX', family: 'evm' },
+  { id: 'xrp', name: 'XRP Ledger', ticker: 'XRP', family: 'xrp' },
+  { id: 'arbitrum', name: 'Arbitrum One (L2 on ETH)', ticker: 'ARB', family: 'evm' },
+  { id: 'optimism', name: 'Optimism (L2 on ETH)', ticker: 'OP', family: 'evm' },
 ];
 
 const STATE = {
@@ -118,9 +118,11 @@ function fmtFiat(feeUsd, feeJpy, fiat) {
 
 function decideStatusTag(sec, status) {
   if (status === 'failed') return { label: 'Failed', className: 'bad' };
+  if (status === 'api-failed') return { label: 'API failed', className: 'bad' };
   if (status === 'fast') return { label: 'Fast', className: 'good' };
   if (status === 'slow') return { label: 'Slow', className: 'warn' };
-  if (status === 'avg') return { label: 'Avg', className: '' };
+  if (status === 'avg' || status === 'ok') return { label: 'Avg', className: '' };
+  if (status === 'normal') return { label: 'Normal', className: '' };
   if (sec == null || !Number.isFinite(sec)) return { label: 'Avg', className: '' };
   if (sec <= 60) return { label: 'Fast', className: 'good' };
   if (sec <= 600) return { label: 'Avg', className: '' };
@@ -140,23 +142,34 @@ function applyRowGlow() {
 }
 
 // ----- API -----
+async function fetchFeeSnapshot() {
+  const res = await fetch('/data/fee_snapshot_demo.json', { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`snapshot ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchHistory() {
+  try {
+    const res = await fetch('/api/history?limit=100');
+    if (!res.ok) return null;
+    return res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
 async function fetchAll() {
   showStatus('Loading…', 'loading');
 
   try {
-    const [snapshotRes, historyRes] = await Promise.all([
-      fetch('/api/snapshot'),
-      fetch('/api/history?limit=100').catch(() => null),
+    const [snapshotJson, historyJson] = await Promise.all([
+      fetchFeeSnapshot(),
+      fetchHistory(),
     ]);
 
-    if (!snapshotRes.ok) {
-      throw new Error(`snapshot ${snapshotRes.status}`);
-    }
-
-    const snapshotJson = await snapshotRes.json();
-    const historyJson = historyRes && historyRes.ok ? await historyRes.json() : null;
-
-    STATE.snapshot = snapshotJson.chains || {};
+    STATE.snapshot = snapshotJson && snapshotJson.chains ? snapshotJson.chains : {};
     STATE.history = historyJson && historyJson.chains ? historyJson.chains : {};
 
     const serverTime = snapshotJson.generatedAt || new Date().toISOString();
