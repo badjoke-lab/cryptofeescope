@@ -139,10 +139,23 @@ header{
   padding:4px 8px;
   font-size:12px;
 }
+.btn.active{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:var(--btn-text-strong);
+  font-weight:600;
+}
 .btn.full{
   width:100%;
 }
 .btn .icon{margin-right:2px}
+
+.currency-toggle{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
 
 /* Layout */
 main{
@@ -232,6 +245,14 @@ tbody tr:hover{
   color:var(--muted);
   white-space:nowrap;
 }
+.status-cell{
+  text-transform:capitalize;
+  font-weight:600;
+}
+.status-cell.status-fast{color:var(--good);}
+.status-cell.status-normal{color:var(--muted);}
+.status-cell.status-slow{color:var(--warn);}
+.status-cell.status-unknown{color:var(--muted);}
 
 /* Details 列（▾ボタン） */
 .col-details{
