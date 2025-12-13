@@ -1,6 +1,23 @@
-// ========== CryptoFeeScope — snapshot + history + fee details tooltip ==========
+// FeeSnapshot JSON schema (demo)
+// {
+//   generatedAt: string,
+//   vsCurrencies: string[], // ["usd", "jpy"]
+//   chains: {
+//     [key: string]: {
+//       label: string,
+//       feeUSD: number,
+//       feeJPY: number,
+//       speedSec: number,
+//       status: string,
+//       updated: string,
+//       native: { amount: number, symbol: string },
+//       tiers: { label: string, feeUSD: number, feeJPY: number }[],
+//       source: { price: { provider: string, id: string } }
+//     }
+//   }
+// }
 
-// ----- Theme -----
+// ----- Theme helpers -----
 const THEME_KEY = 'cfs-theme';
 
 function getInitialTheme() {
@@ -18,421 +35,147 @@ function applyTheme(theme) {
   localStorage.setItem(THEME_KEY, t);
 }
 
-// 初期テーマ適用は DOMContentLoaded 内で行う
+// ----- Snapshot fetch -----
+const SNAPSHOT_URL = "/data/fee_snapshot_demo.json";
 
-// ----- DOM refs -----
-const TBL = {
-  status: document.getElementById('status'),
-  q: document.getElementById('q'),
-  priority: document.getElementById('priority'),
-  fiat: document.getElementById('fiat'),
-  tbody: document.getElementById('tbody'),
-  historyCanvas: document.getElementById('historyCanvas'),
-  historyChain: document.getElementById('historyChain'),
-  feeHeader: document.getElementById('feeHeader'),
-};
-
-const REFRESH_BTN = document.getElementById('refreshBtn');
-const THEME_BTN = document.getElementById('themeBtn');
-
-// ----- Config -----
-const FIAT_CONFIG = {
-  USD: { symbol: '$', key: 'usd' },
-  JPY: { symbol: '¥', key: 'jpy' },
-};
-
-// チェーン定義（表示順）
-const CHAINS = [
-  { id: 'btc', name: 'Bitcoin (L1)', ticker: 'BTC', family: 'bitcoin' },
-  { id: 'eth', name: 'Ethereum (L1)', ticker: 'ETH', family: 'evm' },
-  { id: 'bsc', name: 'BNB Smart Chain', ticker: 'BNB', family: 'evm' },
-  { id: 'sol', name: 'Solana (L1)', ticker: 'SOL', family: 'solana' },
-  { id: 'tron', name: 'Tron', ticker: 'TRX', family: 'evm' },
-  { id: 'avax', name: 'Avalanche C-Chain', ticker: 'AVAX', family: 'evm' },
-  { id: 'xrp', name: 'XRP Ledger', ticker: 'XRP', family: 'xrp' },
-  { id: 'arbitrum', name: 'Arbitrum One (L2 on ETH)', ticker: 'ARB', family: 'evm' },
-  { id: 'optimism', name: 'Optimism (L2 on ETH)', ticker: 'OP', family: 'evm' },
-];
-
-const STATE = {
-  snapshot: null,      // { [id]: { feeUSD, feeJPY, speedSec, status, updated, tiers } }
-  history: {},         // { [chainId]: [{ ts, feeUSD }] }
-  fiat: 'USD',
-  priority: 'standard',
-  search: '',
-  lastUpdated: null,
-  openDetails: null,
-};
-
-let AUTO_REFRESH_TIMER = null;
-
-// ----- Helpers -----
-function showStatus(text, type = 'ok') {
-  if (!TBL.status) return;
-  TBL.status.textContent = text;
-  TBL.status.dataset.variant = type;
-}
-
-function fmtTime(date) {
-  if (!date) return '—';
-  const d = typeof date === 'string' ? new Date(date) : date;
-  if (Number.isNaN(d.getTime())) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
-
-function fmtSpeed(sec) {
-  if (sec == null || !Number.isFinite(sec)) return '—';
-  if (sec < 90) return `${Math.round(sec)} s`;
-  const m = sec / 60;
-  return `${m.toFixed(1)} min`;
-}
-
-function fmtTierSpeed(sec, preferMinutes = false) {
-  if (sec == null || !Number.isFinite(sec)) return '—';
-  if (preferMinutes) {
-    const m = Math.max(1, Math.round(sec / 60));
-    return `${m} min`;
-  }
-  const s = Math.max(1, Math.round(sec));
-  return `${s} sec`;
-}
-
-function fmtFiat(feeUsd, feeJpy, fiat) {
-  const cfg = FIAT_CONFIG[fiat] || FIAT_CONFIG.USD;
-  const value = fiat === 'JPY'
-    ? (Number.isFinite(feeJpy) ? feeJpy : feeUsd)
-    : feeUsd;
-
-  if (value == null || !Number.isFinite(value)) return '—';
-
-  if (fiat === 'USD') {
-    if (value < 0.001) return '< $0.001';
-    return `${cfg.symbol}${value.toFixed(3)}`;
-  }
-
-  return `${cfg.symbol}${value.toFixed(2)}`;
-}
-
-function decideStatusTag(sec, status) {
-  if (status === 'failed') return { label: 'Failed', className: 'bad' };
-  if (status === 'api-failed') return { label: 'API failed', className: 'bad' };
-  if (status === 'fast') return { label: 'Fast', className: 'good' };
-  if (status === 'slow') return { label: 'Slow', className: 'warn' };
-  if (status === 'avg' || status === 'ok') return { label: 'Avg', className: '' };
-  if (status === 'normal') return { label: 'Normal', className: '' };
-  if (sec == null || !Number.isFinite(sec)) return { label: 'Avg', className: '' };
-  if (sec <= 60) return { label: 'Fast', className: 'good' };
-  if (sec <= 600) return { label: 'Avg', className: '' };
-  return { label: 'Slow', className: 'warn' };
-}
-
-function applyRowGlow() {
-  if (!TBL.tbody) return;
-  const rows = Array.from(TBL.tbody.querySelectorAll('tr'));
-  rows.forEach(r => {
-    r.classList.add('rowglow');
-    r.classList.add('on');
-  });
-  setTimeout(() => {
-    rows.forEach(r => r.classList.remove('on'));
-  }, 600);
-}
-
-// ----- API -----
 async function fetchFeeSnapshot() {
-  const res = await fetch('/data/fee_snapshot_demo.json', { cache: 'no-store' });
+  const res = await fetch(SNAPSHOT_URL, { cache: "no-store" });
   if (!res.ok) {
-    throw new Error(`snapshot ${res.status}`);
+    throw new Error(`Failed to load fee snapshot: ${res.status}`);
   }
   return res.json();
 }
 
-async function fetchHistory() {
-  try {
-    const res = await fetch('/api/history?limit=100');
-    if (!res.ok) return null;
-    return res.json();
-  } catch (e) {
-    return null;
+// ----- State & formatters -----
+const state = {
+  snapshot: null,
+  currency: "usd", // "usd" | "jpy"
+};
+
+function formatFiat(value) {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value < 0.001) {
+    return value.toExponential(2);
   }
+  return value.toFixed(3);
 }
 
-async function fetchAll() {
-  showStatus('Loading…', 'loading');
-
-  try {
-    const [snapshotJson, historyJson] = await Promise.all([
-      fetchFeeSnapshot(),
-      fetchHistory(),
-    ]);
-
-    STATE.snapshot = snapshotJson && snapshotJson.chains ? snapshotJson.chains : {};
-    STATE.history = historyJson && historyJson.chains ? historyJson.chains : {};
-
-    const serverTime = snapshotJson.generatedAt || new Date().toISOString();
-    STATE.lastUpdated = serverTime;
-
-    render();
-    renderHistory();
-
-    applyRowGlow();
-    showStatus(`Updated ${fmtTime(serverTime)}`);
-  } catch (err) {
-    console.error(err);
-    showStatus('Failed to fetch data', 'error');
-  }
+function formatUpdated(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
 }
 
 // ----- Rendering -----
-function applyFilterAndSort() {
-  const q = STATE.search.trim().toLowerCase();
-  const priority = STATE.priority;
-
-  let list = CHAINS.slice();
-
-  if (q) {
-    list = list.filter(c => {
-      const t = `${c.name} ${c.ticker}`.toLowerCase();
-      return t.includes(q);
-    });
+function renderTable() {
+  const tbody = document.getElementById("fee-table-body");
+  const header = document.getElementById("fee-header");
+  if (header) {
+    header.textContent = state.currency === "usd" ? "Fee (USD)" : "Fee (JPY)";
   }
+  if (!tbody || !state.snapshot) return;
 
-  if (priority === 'fast') {
-    // 速いチェーンを上に（単純に snapshot.speedSec でソート）
-    list.sort((a, b) => {
-      const sa = STATE.snapshot?.[a.id]?.speedSec ?? Infinity;
-      const sb = STATE.snapshot?.[b.id]?.speedSec ?? Infinity;
-      return sa - sb;
-    });
-  }
+  const currency = state.currency; // "usd" or "jpy"
+  const chains = state.snapshot.chains || {};
 
-  return list;
-}
+  const rows = Object.entries(chains).map(([key, chain]) => {
+    const fee = currency === "usd" ? chain.feeUSD : chain.feeJPY;
+    const feeStr = formatFiat(fee);
+    const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
+    const statusStr = chain.status || "unknown";
 
-function buildDetailsContent(data, fiat) {
-  if (!data) return '';
-  const tiers = Array.isArray(data.tiers) ? data.tiers : [];
-  const tierMap = {
-    fast: tiers.find(t => t.label === 'fast'),
-    standard: tiers.find(t => t.label === 'standard'),
-    slow: tiers.find(t => t.label === 'slow'),
-  };
+    // キーを利用した簡易ticker。後でchains.jsonと統合予定
+    const ticker = (key || "?").toUpperCase();
 
-  const feeUsd = data.feeUSD;
-  const feeJpy = data.feeJPY;
-  const fastFee = tierMap.fast?.feeUSD ?? feeUsd;
-  const standardFee = tierMap.standard?.feeUSD ?? feeUsd;
-  const slowFee = tierMap.slow?.feeUSD ?? feeUsd;
-
-  const fastJpy = tierMap.fast?.feeJPY ?? feeJpy;
-  const standardJpy = tierMap.standard?.feeJPY ?? feeJpy;
-  const slowJpy = tierMap.slow?.feeJPY ?? feeJpy;
-
-  const fastSpeed = tierMap.fast?.speedSec ?? data.speedSec;
-  const standardSpeed = tierMap.standard?.speedSec ?? data.speedSec;
-  const slowSpeed = tierMap.slow?.speedSec ?? (standardSpeed != null ? standardSpeed * 2 : null);
-
-  return `
-    <div class="fee-details-block">
-      <div class="mono strong">Exact fee: ${fmtFiat(feeUsd, feeJpy, fiat)}</div>
-      <div class="gas-tiers-wrapper">
-        <div class="mono">Fast (~${fmtTierSpeed(fastSpeed)}): ${fmtFiat(fastFee, fastJpy, fiat)}</div>
-        <div class="mono">Normal (~${fmtTierSpeed(standardSpeed)}): ${fmtFiat(standardFee, standardJpy, fiat)}</div>
-        <div class="mono">Slow (~${fmtTierSpeed(slowSpeed, true)}): ${fmtFiat(slowFee, slowJpy, fiat)}</div>
-      </div>
-    </div>
-  `;
-}
-
-function render() {
-  if (!TBL.tbody) return;
-
-  const snapshot = STATE.snapshot || {};
-  const rows = applyFilterAndSort();
-  const fiat = STATE.fiat;
-
-  const rowsHtml = rows.map(chain => {
-    const data = snapshot[chain.id] || {};
-    const fee = data.feeUSD;
-    const feeCell = fee == null
-      ? '<span class="mono">—</span>'
-      : `<span class="mono">${fmtFiat(fee, data.feeJPY, fiat)}</span>`;
-
-    const speedCell = data.speedSec == null
-      ? '—'
-      : `<span class="mono">${fmtSpeed(data.speedSec)}</span>`;
-
-    const { label: statusLabel, className: statusClass } = decideStatusTag(data.speedSec, data.status);
-
-    const statusHtml = `<span class="tag ${statusClass}">${statusLabel}</span>`;
-
-    const updatedHtml = data.updated
-      ? fmtTime(data.updated)
-      : '—';
-
-    const hasTiers = data.ok !== false && data.feeUSD != null && Array.isArray(data.tiers) && data.tiers.length > 0;
-
-    const detailsCell = hasTiers
-      ? `<button type="button" class="details-btn" data-chain-id="${chain.id}">Details</button>`
-      : '<span class="muted">—</span>';
-
-    let rowHtml = `
-      <tr data-chain-id="${chain.id}">
-        <td>${chain.name}</td>
-        <td class="mono">${chain.ticker}</td>
-        <td class="fee">${feeCell}</td>
-        <td>${speedCell}</td>
-        <td class="col-details">${detailsCell}</td>
-        <td>${statusHtml}</td>
-        <td class="updated">${updatedHtml}</td>
+    return `
+      <tr class="fee-row status-${statusStr}">
+        <td>${chain.label || key}</td>
+        <td>${ticker}</td>
+        <td>${feeStr}</td>
+        <td>${speedStr}</td>
+        <td class="status-cell status-${statusStr}">${statusStr}</td>
+        <td>${formatUpdated(chain.updated)}</td>
       </tr>
     `;
-
-    if (STATE.openDetails === chain.id && hasTiers) {
-      rowHtml += `
-        <tr class="fee-details-row" data-details-for="${chain.id}">
-          <td colspan="7" class="fee-details-cell">${buildDetailsContent(data, fiat)}</td>
-        </tr>
-      `;
-    }
-
-    return rowHtml;
-  }).join('');
-
-  TBL.tbody.innerHTML = rowsHtml;
-
-  updateFeeHeader();
-}
-
-// フィアット切り替えヘッダ
-function updateFeeHeader() {
-  if (!TBL.feeHeader) return;
-  const fiat = STATE.fiat;
-  const label = fiat === 'JPY' ? 'Fee (JPY)' : 'Fee (USD)';
-  TBL.feeHeader.textContent = label;
-}
-
-// ----- History chart -----
-function renderHistory() {
-  const canvas = TBL.historyCanvas;
-  const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
-  if (!canvas || !ctx) return;
-
-  const chainId = TBL.historyChain ? TBL.historyChain.value : 'btc';
-  const points = Array.isArray(STATE.history?.[chainId]) ? STATE.history[chainId] : [];
-
-  const computedHeight = Number.parseInt(getComputedStyle(canvas).height, 10);
-  const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 600;
-  const height = computedHeight || canvas.clientHeight || 160;
-  canvas.width = width;
-  canvas.height = height;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (!points.length) {
-    return;
-  }
-
-  // canvas サイズ
-  const xs = points.map(p => new Date(p.ts).getTime());
-  const ys = points.map(p => p.feeUSD);
-
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-
-  const pad = 10;
-  const rangeX = maxX - minX || 1;
-  const rangeY = maxY - minY || 1;
-
-  function toX(ts) {
-    return pad + ((ts - minX) / rangeX) * (width - pad * 2);
-  }
-  function toY(v) {
-    const ratio = (v - minY) / rangeY;
-    return height - pad - ratio * (height - pad * 2);
-  }
-
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = '#10B981';
-  ctx.beginPath();
-  points.forEach((p, i) => {
-    const x = toX(new Date(p.ts).getTime());
-    const y = toY(p.feeUSD);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
   });
-  ctx.stroke();
+
+  tbody.innerHTML = rows.join("");
 }
 
-// ----- Event bindings -----
-function bindUI() {
-  if (TBL.q) {
-    TBL.q.addEventListener('input', (e) => {
-      STATE.search = e.target.value || '';
-      render();
-    });
+// ----- Lifecycle -----
+async function loadSnapshotAndRender() {
+  const updatedEl = document.getElementById("updated-label");
+  if (updatedEl) {
+    updatedEl.textContent = "Loading…";
   }
-
-  if (TBL.priority) {
-    TBL.priority.addEventListener('change', (e) => {
-      STATE.priority = e.target.value || 'standard';
-      render();
-    });
-  }
-
-  if (TBL.fiat) {
-    TBL.fiat.addEventListener('change', (e) => {
-      STATE.fiat = e.target.value || 'USD';
-      render();
-    });
-  }
-
-  if (TBL.tbody) {
-    TBL.tbody.addEventListener('click', (e) => {
-      const btn = e.target.closest('.details-btn');
-      if (!btn) return;
-      const chainId = btn.dataset.chainId;
-      const isOpen = STATE.openDetails === chainId;
-      STATE.openDetails = isOpen ? null : chainId;
-      render();
-    });
-  }
-
-  if (REFRESH_BTN) {
-    REFRESH_BTN.addEventListener('click', () => {
-      fetchAll();
-    });
-  }
-
-  if (THEME_BTN) {
-    THEME_BTN.addEventListener('click', () => {
-      const current = document.body.classList.contains('dark') ? 'dark' : 'light';
-      applyTheme(current === 'dark' ? 'light' : 'dark');
-    });
-  }
-
-  if (TBL.historyChain) {
-    TBL.historyChain.addEventListener('change', () => {
-      renderHistory();
-    });
+  try {
+    const snapshot = await fetchFeeSnapshot();
+    state.snapshot = snapshot;
+    if (updatedEl) {
+      updatedEl.textContent = new Date(snapshot.generatedAt).toLocaleString();
+    }
+    renderTable();
+  } catch (err) {
+    console.error(err);
+    if (updatedEl) {
+      updatedEl.textContent = "Error loading data";
+    }
   }
 }
 
-// ----- Auto refresh -----
-function startAutoRefresh() {
-  if (AUTO_REFRESH_TIMER) clearInterval(AUTO_REFRESH_TIMER);
-  AUTO_REFRESH_TIMER = setInterval(fetchAll, 60_000);
+function bindCurrencyButtons() {
+  const usdBtn = document.getElementById("currency-usd");
+  const jpyBtn = document.getElementById("currency-jpy");
+  const map = { usd: usdBtn, jpy: jpyBtn };
+
+  function syncActive() {
+    Object.entries(map).forEach(([key, el]) => {
+      if (!el) return;
+      el.classList.toggle("active", state.currency === key);
+    });
+  }
+
+  if (usdBtn) {
+    usdBtn.addEventListener("click", () => {
+      state.currency = "usd";
+      syncActive();
+      renderTable();
+    });
+  }
+  if (jpyBtn) {
+    jpyBtn.addEventListener("click", () => {
+      state.currency = "jpy";
+      syncActive();
+      renderTable();
+    });
+  }
+
+  syncActive();
 }
 
 // ----- Init -----
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   applyTheme(getInitialTheme());
-  bindUI();
-  fetchAll();
-  startAutoRefresh();
+
+  const refreshBtn = document.getElementById("refresh-button");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      loadSnapshotAndRender();
+    });
+  }
+
+  const themeBtn = document.getElementById("themeBtn");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      const current = document.body.classList.contains("dark") ? "dark" : "light";
+      applyTheme(current === "dark" ? "light" : "dark");
+    });
+  }
+
+  bindCurrencyButtons();
+  loadSnapshotAndRender();
 });
