@@ -218,25 +218,28 @@ table{
   width:100%;
   border-collapse:separate;
   border-spacing:0;
-  table-layout:auto;
+  table-layout:fixed;
 }
-.fee-table{table-layout:fixed;}
+.fee-table{width:100%;table-layout:fixed;}
 thead th{
   font-size:12px;
   text-align:left;
   color:var(--muted);
   font-weight:600;
-  padding:10px 12px;
+  padding:0.45rem 0.55rem;
   border-bottom:1px solid var(--line);
   position:sticky;
   top:0;
   background:var(--card);
+  word-wrap:break-word;
+  overflow-wrap:anywhere;
 }
 tbody td{
-  padding:12px;
+  padding:0.45rem 0.55rem;
   border-bottom:1px solid var(--line);
   vertical-align:middle;
   word-break:break-word;
+  overflow-wrap:anywhere;
 }
 tbody tr:hover{
   background:rgba(0,200,150,0.08);
@@ -246,10 +249,8 @@ tbody tr:hover{
 }
 .fee-table .chain-name-cell,
 .fee-table .ticker-cell{
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:140px;
+  white-space:normal;
+  max-width:200px;
 }
 .fee-table .chain-name-cell{font-weight:600;}
 .status-legend{
@@ -459,9 +460,9 @@ footer .note{
 @media(max-width:480px){
   .pill{white-space:normal;}
   .fee-table th,
-  .fee-table td{padding:4px 6px;font-size:12px;}
-  .fee-table .chain-name-cell{max-width:100px;}
-  .fee-table .ticker-cell{max-width:80px;}
+  .fee-table td{padding:0.35rem 0.4rem;font-size:12px;}
+  .fee-table .chain-name-cell{max-width:120px;}
+  .fee-table .ticker-cell{max-width:90px;}
   .updated::before{
     content:"🕒 ";
     margin-right:2px;

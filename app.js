@@ -1,4 +1,4 @@
-// FeeSnapshot JSON schema (demo)
+// FeeSnapshot JSON schema (demo, Phase 1)
 // {
 //   generatedAt: string,
 //   vsCurrencies: string[], // ["usd", "jpy"]
@@ -11,7 +11,6 @@
 //       status: string,
 //       updated: string,
 //       native: { amount: number, symbol: string },
-//       tiers: { label: string, feeUSD: number, feeJPY: number }[],
 //       source: { price: { provider: string, id: string } }
 //     }
 //   }
@@ -137,8 +136,7 @@ function formatFiat(value) {
   }
 
   if (abs >= 0.01 && abs < 1000) {
-    const fixed = value.toFixed(3);
-    return fixed;
+    return `${sign}${abs.toFixed(3)}`;
   }
 
   const suffix = abs >= 1_000_000 ? "m" : "k";
@@ -152,6 +150,7 @@ function formatFiat(value) {
 function formatUpdated(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate()
   ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
@@ -176,51 +175,15 @@ function renderTable() {
   Object.entries(chains).forEach(([key, chain]) => {
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
     const currencyCode = currency.toUpperCase();
-    const hasTiers = Array.isArray(chain.tiers) && chain.tiers.length > 0;
-    const tiers = hasTiers ? chain.tiers : [];
-    const baseTier = hasTiers ? tiers[0] : null;
-    const rawFee =
-      baseTier && typeof baseTier[currencyKey] === "number"
-        ? baseTier[currencyKey]
-        : chain[currencyKey];
+    const rawFee = chain[currencyKey];
 
     const displayFee = formatFiat(rawFee);
-    let feeTitle =
-      Number.isFinite(rawFee) && rawFee != null
+    const feeTitle =
+      typeof rawFee === "number" && Number.isFinite(rawFee)
         ? `${toPlainNumberString(rawFee)} ${currencyCode}`
         : "";
-    if (hasTiers) {
-      const entries = tiers
-        .map((tier) => {
-          const feeValue = tier ? tier[currencyKey] : null;
-          if (typeof feeValue !== "number" || Number.isNaN(feeValue)) return null;
-          const raw = `${toPlainNumberString(feeValue)} ${currencyCode}`;
-          const label = tier.label
-            ? tier.label.charAt(0).toUpperCase() + tier.label.slice(1)
-            : "Tier";
-          return `${label}: ${raw}`;
-        })
-        .filter(Boolean);
-      if (entries.length > 0) {
-        feeTitle = entries.join("; ");
-      }
-    }
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const statusStr = chain.status || "unknown";
-    const change = chain.priceChange24hPct;
-    let changeText = "—";
-    let changeClass = "change-flat";
-    let changeTitle = "No 24h data (demo API)";
-
-    if (typeof change === "number" && !Number.isNaN(change)) {
-      const sign = change > 0 ? "+" : "";
-      const rounded = change.toFixed(1);
-      changeText = `${sign}${rounded}%`;
-      changeTitle = `${sign}${change.toFixed(2)}% over last 24h`;
-
-      if (change > 0.1) changeClass = "change-pos";
-      else if (change < -0.1) changeClass = "change-neg";
-    }
 
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
     const ticker = (key || "?").toUpperCase();
@@ -243,21 +206,6 @@ function renderTable() {
       tdFee.title = feeTitle;
     }
 
-    if (hasTiers && tiers.length > 1) {
-      const tierNote = document.createElement("div");
-      const baseLabel = baseTier?.label
-        ? baseTier.label.charAt(0).toUpperCase() + baseTier.label.slice(1)
-        : "Standard";
-      tierNote.classList.add("fee-tier-hint");
-      tierNote.textContent = `${baseLabel} · +${tiers.length - 1} tiers`;
-      tdFee.appendChild(tierNote);
-    }
-
-    const tdChange = document.createElement("td");
-    tdChange.classList.add("change-cell", changeClass);
-    tdChange.textContent = changeText;
-    tdChange.title = changeTitle;
-
     const tdSpeed = document.createElement("td");
     tdSpeed.textContent = speedStr;
 
@@ -268,7 +216,7 @@ function renderTable() {
     const tdUpdated = document.createElement("td");
     tdUpdated.textContent = formatUpdated(chain.updated);
 
-    tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus, tdUpdated);
+    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus, tdUpdated);
     tbody.appendChild(tr);
   });
 }
@@ -345,4 +293,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   bindCurrencyButtons();
   loadSnapshotAndRender();
+  setInterval(loadSnapshotAndRender, 60_000);
 });

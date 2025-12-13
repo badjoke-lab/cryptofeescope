@@ -1,24 +1,24 @@
 # CryptoFeeScope (Snapshot Demo)
 
-This repository includes a minimal demo snapshot for fee visualization. The demo snapshot can be regenerated locally with a small Node.js helper.
+CryptoFeeScope Phase 1 is a snapshot-based fee viewer powered by the CoinGecko Demo API. The frontend reads a static `fee_snapshot_demo.json` file (USD / JPY) and shows **one standard fee per chain**.
 
-## Usage
+## What this demo includes (Phase 1)
 
-- View a static fee snapshot table (USD / JPY toggle) backed by `data/fee_snapshot_demo.json`, including 24h price change data
-  from the CoinGecko Demo API.
-- Currently covered chains: Bitcoin, Ethereum, BNB Smart Chain, Solana, Tron, Avalanche C-Chain, XRP Ledger, Arbitrum, Optimism.
+- Snapshot-only rendering: the browser pulls `/data/fee_snapshot_demo.json` on load and every 60 seconds (no tiers, no 24h change column).
+- Supported chains (standard fee only): Bitcoin (BTC), Ethereum (ETH), BNB Smart Chain (BNB), Solana (SOL), Tron (TRX), Avalanche C-Chain (AVAX), XRP Ledger (XRP), Arbitrum One (ARB), Optimism (OP).
+- Mobile-friendly table layout that fits 360px width without horizontal scrolling.
 
 ## Prerequisites
 
-- Node.js 18 or later (for built-in `fetch`)
-- CoinGecko Demo API key exported as `COINGECKO_API_KEY`
+- Node.js 18 or later (for built-in `fetch`).
+- CoinGecko Demo API key exported as `COINGECKO_API_KEY` (set `export COINGECKO_API_KEY="<your_demo_key>"`).
 
 ## Generate the demo snapshot
 
-Use the helper script to fetch CoinGecko Demo prices (`/api/v3/simple/price`) and emit a snapshot compatible with `data/fee_snapshot_demo.json`:
+Use the helper script to fetch CoinGecko Demo prices (`/api/v3/simple/price`) and emit the snapshot:
 
 ```bash
 node scripts/generate_fee_snapshot_demo.js > data/fee_snapshot_demo.json
 ```
 
-The script prints JSON to standard output so you can redirect it to the snapshot file or another destination as needed.
+Deploy the updated `data/fee_snapshot_demo.json` to Cloudflare Pages (or another static host). The frontend will automatically reload the file every 60 seconds and refresh the table.
