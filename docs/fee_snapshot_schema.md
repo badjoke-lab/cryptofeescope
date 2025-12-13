@@ -23,5 +23,8 @@ Each entry under `chains` uses the chain key (e.g., `btc`, `eth`) and contains:
 - `tiers[]` (array): Fee tiers, each with `label`, `feeUSD`, and `feeJPY` values.
 - `source.price.provider` (string): Price data provider identifier (e.g., `coingecko-demo`).
 - `source.price.id` (string): Provider-specific asset identifier.
+- `priceChange24hPct` (number | null): 24-hour price change percentage (USD-based) returned by the CoinGecko Demo API. Example:
+  `3.25` = +3.25%. May be `null` if the API omits this field. This field is an auxiliary indicator for the snapshot table and
+  does not affect fee calculations.
 
 The schema above captures the Phase 1 fields; later phases may introduce additional properties while keeping backward compatibility where possible.

@@ -4,7 +4,8 @@ This repository includes a minimal demo snapshot for fee visualization. The demo
 
 ## Usage
 
-- View a static fee snapshot table (USD / JPY toggle) backed by `data/fee_snapshot_demo.json`.
+- View a static fee snapshot table (USD / JPY toggle) backed by `data/fee_snapshot_demo.json`, including 24h price change data
+  from the CoinGecko Demo API.
 - Currently covered chains: Bitcoin, Ethereum, BNB Smart Chain, Solana, Tron, Avalanche C-Chain, XRP Ledger, Arbitrum, Optimism.
 
 ## Prerequisites

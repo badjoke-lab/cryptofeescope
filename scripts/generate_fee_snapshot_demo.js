@@ -108,10 +108,11 @@ const CHAINS = [
 ];
 
 function buildSimplePriceUrl(ids) {
-  return (
-    `${COINGECKO_PRICE_URL}?` +
-    new URLSearchParams({ ids: ids.join(","), vs_currencies: VS_CURRENCIES.join(",") })
-  );
+  const url = new URL(COINGECKO_PRICE_URL);
+  url.searchParams.set("ids", ids.join(","));
+  url.searchParams.set("vs_currencies", VS_CURRENCIES.join(","));
+  url.searchParams.set("include_24hr_change", "true");
+  return url.toString();
 }
 
 // CoinGecko Demo /simple/price から価格を取得
@@ -141,6 +142,8 @@ function buildChainEntry(chain, price, updated) {
 
   const feeUSD = chain.feeNative * price.usd;
   const feeJPY = chain.feeNative * price.jpy;
+  const priceChange24hPct =
+    typeof price.usd_24h_change === "number" ? price.usd_24h_change : null;
 
   return {
     label: chain.label,
@@ -166,6 +169,7 @@ function buildChainEntry(chain, price, updated) {
         id: chain.coingeckoId,
       },
     },
+    priceChange24hPct,
   };
 }
 
