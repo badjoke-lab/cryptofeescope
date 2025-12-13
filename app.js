@@ -207,9 +207,11 @@ function renderTable() {
     tr.classList.add("fee-row", `status-${statusStr}`);
 
     const tdChain = document.createElement("td");
+    tdChain.classList.add("chain-name-cell");
     tdChain.textContent = chain.label || key;
 
     const tdTicker = document.createElement("td");
+    tdTicker.classList.add("ticker-cell");
     tdTicker.textContent = ticker;
 
     const tdFee = document.createElement("td");
@@ -256,7 +258,7 @@ async function loadSnapshotAndRender() {
     const snapshot = await fetchFeeSnapshot();
     state.snapshot = snapshot;
     if (updatedEl) {
-      updatedEl.textContent = new Date(snapshot.generatedAt).toLocaleString();
+      updatedEl.textContent = formatUpdated(snapshot.generatedAt);
     }
     renderTable();
   } catch (err) {

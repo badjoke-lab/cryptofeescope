@@ -97,6 +97,10 @@ header{
   color:var(--muted);
   white-space:nowrap;
 }
+.updated-label{
+  font-size:12px;
+  opacity:0.9;
+}
 .spacer{flex:1}
 .toolbar{
   display:flex;
@@ -216,6 +220,7 @@ table{
   border-spacing:0;
   table-layout:auto;
 }
+.fee-table{table-layout:fixed;}
 thead th{
   font-size:12px;
   text-align:left;
@@ -239,6 +244,40 @@ tbody tr:hover{
 [data-theme="dark"] tbody tr:hover{
   background:rgba(0,224,162,0.09);
 }
+.fee-table .chain-name-cell,
+.fee-table .ticker-cell{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:140px;
+}
+.fee-table .chain-name-cell{font-weight:600;}
+.status-legend{
+  font-size:12px;
+  opacity:0.85;
+  margin-bottom:8px;
+}
+.status-legend-title{
+  font-weight:600;
+  margin-bottom:4px;
+}
+.status-legend-list{
+  list-style:none;
+  padding:0;
+  margin:0;
+}
+.status-legend-list li{margin:2px 0;}
+.status-dot{
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  margin-right:6px;
+  vertical-align:middle;
+}
+.status-dot.fast{background:var(--good);}
+.status-dot.normal{background:var(--muted);}
+.status-dot.slow{background:var(--warn);}
 .mono{
   font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -412,11 +451,20 @@ footer .note{
 }
 
 @media(max-width:480px){
-  thead th,
-  tbody td{padding:4px 6px;font-size:12px;}
+  .pill{white-space:normal;}
+  .fee-table th,
+  .fee-table td{padding:4px 6px;font-size:12px;}
+  .fee-table .chain-name-cell{max-width:100px;}
+  .fee-table .ticker-cell{max-width:80px;}
   .updated::before{
     content:"🕒 ";
     margin-right:2px;
+  }
+
+  .updated-label{
+    display:block;
+    margin-top:4px;
+    font-size:11px;
   }
 
   .btn .label{display:none;}

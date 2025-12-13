@@ -54,7 +54,7 @@
           <div class="sub">L1 / L2 fee &amp; latency snapshot</div>
         </div>
       </div>
-      <div class="pill">Updated <span id="updated-label">—</span></div>
+      <div class="pill">Updated <span id="updated-label" class="updated-label">—</span></div>
       <div class="spacer"></div>
       <div class="toolbar">
         <!-- Refresh = 緑のボタン -->
@@ -81,13 +81,11 @@
         <div class="inner">
           <h2>Snapshot controls</h2>
           <p>
-            This Cloudflare Pages build reads the demo snapshot from <code>/data/fee_snapshot_demo.json</code>.
-            Use the buttons below to reload the file without cache and switch the fiat currency shown in the
-            table.
+            CryptoFeeScope (demo) pulls an estimated fee snapshot from CoinGecko at
+            <code>/data/fee_snapshot_demo.json</code>.
           </p>
           <p>
-            Fees shown in the table represent typical L1 / L2 transaction costs and confirmation speed from the latest
-            demo snapshot so you can compare chains at a glance.
+            Reload the snapshot and toggle fiat currency below. Values are approximate; not investment advice. ※ デモ版の推定手数料です。
           </p>
           <div class="currency-toggle">
             <button id="currency-usd" class="btn small" type="button">USD</button>
@@ -100,7 +98,15 @@
 
       <article class="card">
         <div class="inner">
-          <table>
+          <div class="status-legend" aria-label="Status legend">
+            <div class="status-legend-title">Status legend</div>
+            <ul class="status-legend-list">
+              <li><span class="status-dot fast"></span>Fast（速い） ≈ a few seconds to tens of seconds</li>
+              <li><span class="status-dot normal"></span>Normal（通常） ≈ a few minutes</li>
+              <li><span class="status-dot slow"></span>Slow（遅い） ≈ 10+ minutes</li>
+            </ul>
+          </div>
+          <table class="fee-table">
             <thead>
               <tr>
                 <th>Chain</th>
