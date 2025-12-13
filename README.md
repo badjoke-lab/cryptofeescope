@@ -2,6 +2,11 @@
 
 This repository includes a minimal demo snapshot for fee visualization. The demo snapshot can be regenerated locally with a small Node.js helper.
 
+## Usage
+
+- View a static fee snapshot table (USD / JPY toggle) backed by `data/fee_snapshot_demo.json`.
+- Currently covered chains: Bitcoin, Ethereum, BNB Smart Chain, Solana, Tron, Avalanche C-Chain, XRP Ledger, Arbitrum, Optimism.
+
 ## Prerequisites
 
 - Node.js 18 or later (for built-in `fetch`)
