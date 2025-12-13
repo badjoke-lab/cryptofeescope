@@ -1,10 +1,14 @@
 // scripts/generate_fee_snapshot_demo.js
-// 事前に: export COINGECKO_API_KEY="あなたのDemoキー"
-// Node v18+ 想定（fetch グローバル）
+// CoinGecko Demo API を使って fee_snapshot_demo.json を生成するユーティリティ
+// 事前に: export COINGECKO_API_KEY="<あなたの Demo API キー>"
+// Node v18+ を想定（fetch がグローバルに存在）
 
 const API_KEY = process.env.COINGECKO_API_KEY;
+const COINGECKO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price";
+const VS_CURRENCIES = ["usd", "jpy"];
+
 if (!API_KEY) {
-  console.error("COINGECKO_API_KEY が環境変数に入っていない");
+  console.error("COINGECKO_API_KEY が環境変数に入っていません。");
   process.exit(1);
 }
 
@@ -43,7 +47,7 @@ const CHAINS = [
     label: "BNB Smart Chain",
     coingeckoId: "binancecoin",
     nativeSymbol: "BNB",
-    feeNative: 0.000105, // 暫定
+    feeNative: 0.000105, // 暫定（約 0.105e-3 BNB）
     speedSec: 5,
     status: "fast",
   },
@@ -103,16 +107,17 @@ const CHAINS = [
   },
 ];
 
+function buildSimplePriceUrl(ids) {
+  return (
+    `${COINGECKO_PRICE_URL}?` +
+    new URLSearchParams({ ids: ids.join(","), vs_currencies: VS_CURRENCIES.join(",") })
+  );
+}
+
 // CoinGecko Demo /simple/price から価格を取得
 async function fetchPrices() {
   const ids = [...new Set(CHAINS.map((c) => c.coingeckoId))];
-
-  const url =
-    "https://api.coingecko.com/api/v3/simple/price?" +
-    new URLSearchParams({
-      ids: ids.join(","),
-      vs_currencies: "usd,jpy",
-    }).toString();
+  const url = buildSimplePriceUrl(ids);
 
   const res = await fetch(url, {
     headers: {
@@ -122,67 +127,78 @@ async function fetchPrices() {
   });
 
   if (!res.ok) {
-    console.error("CoinGecko エラー:", res.status, await res.text());
-    process.exit(1);
+    const body = await res.text();
+    throw new Error(`CoinGecko エラー: ${res.status} ${body}`);
   }
 
   return res.json();
 }
 
+function buildChainEntry(chain, price, updated) {
+  if (!price || typeof price.usd !== "number" || typeof price.jpy !== "number") {
+    return null;
+  }
+
+  const feeUSD = chain.feeNative * price.usd;
+  const feeJPY = chain.feeNative * price.jpy;
+
+  return {
+    label: chain.label,
+    feeUSD,
+    feeJPY,
+    speedSec: chain.speedSec,
+    status: chain.status,
+    updated,
+    native: {
+      amount: chain.feeNative,
+      symbol: chain.nativeSymbol,
+    },
+    tiers: [
+      {
+        label: "standard",
+        feeUSD,
+        feeJPY,
+      },
+    ],
+    source: {
+      price: {
+        provider: "coingecko-demo",
+        id: chain.coingeckoId,
+      },
+    },
+  };
+}
+
 // Snapshot JSON を生成
 async function main() {
   const generatedAt = new Date().toISOString();
-  const prices = await fetchPrices();
+  let prices;
+
+  try {
+    prices = await fetchPrices();
+  } catch (error) {
+    console.error("価格取得に失敗しました:", error.message);
+    process.exit(1);
+  }
 
   const chains = {};
 
   for (const chain of CHAINS) {
-    const priceObj = prices[chain.coingeckoId];
-    if (!priceObj || typeof priceObj.usd !== "number" || typeof priceObj.jpy !== "number") {
+    const entry = buildChainEntry(chain, prices[chain.coingeckoId], generatedAt);
+
+    if (!entry) {
       console.warn(
         `価格が取得できなかったためスキップ: ${chain.id} (coingeckoId=${chain.coingeckoId})`
       );
       continue;
     }
 
-    const usd = priceObj.usd;
-    const jpy = priceObj.jpy;
-
-    const feeUSD = chain.feeNative * usd;
-    const feeJPY = chain.feeNative * jpy;
-
-    const updated = generatedAt;
-
-    chains[chain.id] = {
-      label: chain.label,
-      feeUSD,
-      feeJPY,
-      speedSec: chain.speedSec,
-      status: chain.status,
-      updated,
-      native: {
-        amount: chain.feeNative,
-        symbol: chain.nativeSymbol,
-      },
-      tiers: [
-        {
-          label: "standard",
-          feeUSD,
-          feeJPY,
-        },
-      ],
-      source: {
-        price: {
-          provider: "coingecko-demo",
-          id: chain.coingeckoId,
-        },
-      },
-    };
+    chains[chain.id] = entry;
   }
 
   const snapshot = {
     generatedAt,
-    vsCurrencies: ["usd", "jpy"],
+    vsCurrencies: VS_CURRENCIES,
     chains,
   };
 
