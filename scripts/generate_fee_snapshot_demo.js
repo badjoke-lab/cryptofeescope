@@ -111,7 +111,6 @@ function buildSimplePriceUrl(ids) {
   const url = new URL(COINGECKO_PRICE_URL);
   url.searchParams.set("ids", ids.join(","));
   url.searchParams.set("vs_currencies", VS_CURRENCIES.join(","));
-  url.searchParams.set("include_24hr_change", "true");
   return url.toString();
 }
 
@@ -137,13 +136,28 @@ async function fetchPrices() {
 
 function buildChainEntry(chain, price, updated) {
   if (!price || typeof price.usd !== "number" || typeof price.jpy !== "number") {
-    return null;
+    return {
+      label: chain.label,
+      feeUSD: null,
+      feeJPY: null,
+      speedSec: chain.speedSec,
+      status: "unavailable",
+      updated: null,
+      native: {
+        amount: chain.feeNative,
+        symbol: chain.nativeSymbol,
+      },
+      source: {
+        price: {
+          provider: "coingecko-demo",
+          id: chain.coingeckoId,
+        },
+      },
+    };
   }
 
   const feeUSD = chain.feeNative * price.usd;
   const feeJPY = chain.feeNative * price.jpy;
-  const priceChange24hPct =
-    typeof price.usd_24h_change === "number" ? price.usd_24h_change : null;
 
   return {
     label: chain.label,
@@ -156,20 +170,12 @@ function buildChainEntry(chain, price, updated) {
       amount: chain.feeNative,
       symbol: chain.nativeSymbol,
     },
-    tiers: [
-      {
-        label: "standard",
-        feeUSD,
-        feeJPY,
-      },
-    ],
     source: {
       price: {
         provider: "coingecko-demo",
         id: chain.coingeckoId,
       },
     },
-    priceChange24hPct,
   };
 }
 

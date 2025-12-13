@@ -1,30 +1,27 @@
 # Fee Snapshot Schema (Phase 1)
 
-This document summarizes the structure of `data/fee_snapshot_demo.json` for Phase 1. Future phases may extend the schema with additional fields.
+Phase 1 delivers a static snapshot that lists a single standard fee per chain. There are no tiers or price-change metrics in this version.
 
-## Root object
+## Top-level fields
 
-- `generatedAt` (string): ISO8601 datetime indicating when the snapshot was produced.
-- `vsCurrencies` (array of strings): Fiat currency codes used in the snapshot (e.g., `["usd", "jpy"]`).
-- `chains` (object): Map of chain keys to chain detail objects.
+- `generatedAt` (`string`): ISO8601 timestamp when the snapshot was generated.
+- `vsCurrencies` (`string[]`): Fiat currencies included in the snapshot. Phase 1 uses `["usd", "jpy"]`.
+- `chains` (`object`): Map keyed by chain id (e.g., `btc`, `eth`). Each value describes one chain entry.
 
-## Chain object
+## Chain entry fields
 
-Each entry under `chains` uses the chain key (e.g., `btc`, `eth`) and contains:
+- `label` (`string`): Human-readable chain name.
+- `feeUSD` (`number | null`): Standard transfer fee converted to USD. `null` if pricing is unavailable.
+- `feeJPY` (`number | null`): Standard transfer fee converted to JPY. `null` if pricing is unavailable.
+- `speedSec` (`number | null`): Estimated confirmation time in seconds for a standard transaction.
+- `status` (`string`): Display hint for speed/availability (e.g., `fast`, `normal`, `slow`, `unavailable`).
+- `updated` (`string | null`): ISO8601 timestamp for the entry. Aligns with `generatedAt` in the demo generator.
+- `native.amount` (`number`): Native fee amount (before fiat conversion).
+- `native.symbol` (`string`): Native token symbol for the chain.
+- `source.price.provider` (`string`): Price provider identifier (e.g., `coingecko-demo`).
+- `source.price.id` (`string`): Provider-specific asset id used for price lookup.
 
-- `label` (string): Human-readable chain name.
-- `feeUSD` (number): Primary fee estimate in USD for the standard tier.
-- `feeJPY` (number): Primary fee estimate in JPY for the standard tier.
-- `speedSec` (number): Estimated confirmation or finality speed in seconds.
-- `status` (string): Availability state such as `normal` or `unavailable`.
-- `updated` (string): ISO8601 timestamp for the latest fee estimation.
-- `native.amount` (number): Native asset amount assumed for the fee calculation.
-- `native.symbol` (string): Native asset symbol.
-- `tiers[]` (array): Fee tiers, each with `label`, `feeUSD`, and `feeJPY` values.
-- `source.price.provider` (string): Price data provider identifier (e.g., `coingecko-demo`).
-- `source.price.id` (string): Provider-specific asset identifier.
-- `priceChange24hPct` (number | null): 24-hour price change percentage (USD-based) returned by the CoinGecko Demo API. Example:
-  `3.25` = +3.25%. May be `null` if the API omits this field. This field is an auxiliary indicator for the snapshot table and
-  does not affect fee calculations.
+## Notes
 
-The schema above captures the Phase 1 fields; later phases may introduce additional properties while keeping backward compatibility where possible.
+- Phase 1 ships **single standard fee only**; tiered fees are not produced or rendered yet.
+- The snapshot is static. The frontend simply refetches the JSON periodically (every 60 seconds) instead of streaming updates.
