@@ -86,12 +86,67 @@ const state = {
   currency: "usd", // "usd" | "jpy"
 };
 
+function toPlainNumberString(value) {
+  if (!Number.isFinite(value)) return String(value);
+  const sign = value < 0 ? "-" : "";
+  const absValue = Math.abs(value);
+  const str = String(absValue);
+  if (!/e/i.test(str)) return `${sign}${str}`;
+
+  const [mantissa, exponentPart] = str.split("e");
+  const exponent = parseInt(exponentPart, 10);
+  if (!Number.isFinite(exponent)) return `${sign}${str}`;
+
+  const [integerPart, fractionalPart = ""] = mantissa.split(".");
+  const digits = integerPart + fractionalPart;
+  if (exponent < 0) {
+    const zeros = "0".repeat(Math.max(0, Math.abs(exponent) - 1));
+    return `${sign}0.${zeros}${digits}`.replace(/\.?0+$/, "");
+  }
+
+  const decimalShift = exponent - fractionalPart.length;
+  if (decimalShift >= 0) {
+    return `${sign}${digits}${"0".repeat(decimalShift)}`;
+  }
+
+  const splitIndex = digits.length + decimalShift;
+  return `${sign}${digits.slice(0, splitIndex)}.${digits.slice(splitIndex)}`.replace(/\.?0+$/, "");
+}
+
+function trimTrailingZeros(str) {
+  return str.includes(".") ? str.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : str;
+}
+
 function formatFiat(value) {
   if (value == null || Number.isNaN(value)) return "—";
-  if (value < 0.001) {
-    return value.toExponential(2);
+
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (abs > 0 && abs < 1e-6) {
+    return `${sign}< 0.000001`;
   }
-  return value.toFixed(3);
+
+  if (abs === 0) {
+    return `${sign}0.000`;
+  }
+
+  if (abs >= 1e-6 && abs < 0.01) {
+    const fixed = trimTrailingZeros(abs.toFixed(6));
+    return `${sign}${fixed}`;
+  }
+
+  if (abs >= 0.01 && abs < 1000) {
+    const fixed = abs.toFixed(3);
+    return `${sign}${fixed}`;
+  }
+
+  const suffix = abs >= 1_000_000 ? "m" : "k";
+  const divisor = suffix === "m" ? 1_000_000 : 1_000;
+  const base = abs / divisor;
+  const decimals = base >= 10 ? 1 : 2;
+  const compact = trimTrailingZeros(base.toFixed(decimals));
+  return `${sign}${compact}${suffix}`;
 }
 
 function formatUpdated(iso) {
@@ -116,8 +171,17 @@ function renderTable() {
   const currency = state.currency; // "usd" or "jpy"
   const chains = state.snapshot.chains || {};
 
-  const rows = Object.entries(chains).map(([key, chain]) => {
-    const fee = currency === "usd" ? chain.feeUSD : chain.feeJPY;
+  tbody.textContent = "";
+
+  Object.entries(chains).forEach(([key, chain]) => {
+    const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
+    const tiers = Array.isArray(chain.tiers) ? chain.tiers : [];
+    const standardTier = tiers[0];
+    const fee =
+      standardTier && typeof standardTier[currencyKey] === "number"
+        ? standardTier[currencyKey]
+        : chain[currencyKey];
+
     const feeStr = formatFiat(fee);
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const statusStr = chain.status || "unknown";
@@ -125,19 +189,42 @@ function renderTable() {
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
     const ticker = (key || "?").toUpperCase();
 
-    return `
-      <tr class="fee-row status-${statusStr}">
-        <td>${chain.label || key}</td>
-        <td>${ticker}</td>
-        <td>${feeStr}</td>
-        <td>${speedStr}</td>
-        <td class="status-cell status-${statusStr}">${statusStr}</td>
-        <td>${formatUpdated(chain.updated)}</td>
-      </tr>
-    `;
-  });
+    const tr = document.createElement("tr");
+    tr.classList.add("fee-row", `status-${statusStr}`);
 
-  tbody.innerHTML = rows.join("");
+    const tdChain = document.createElement("td");
+    tdChain.textContent = chain.label || key;
+
+    const tdTicker = document.createElement("td");
+    tdTicker.textContent = ticker;
+
+    const tdFee = document.createElement("td");
+    tdFee.classList.add("fee-cell");
+    tdFee.textContent = feeStr;
+    if (fee != null && !Number.isNaN(fee)) {
+      tdFee.title = `${toPlainNumberString(fee)} ${currency.toUpperCase()}`;
+    }
+
+    if (tiers.length > 1) {
+      const tierNote = document.createElement("div");
+      tierNote.classList.add("tier-note");
+      tierNote.textContent = `Standard · +${tiers.length - 1} tiers`;
+      tdFee.appendChild(tierNote);
+    }
+
+    const tdSpeed = document.createElement("td");
+    tdSpeed.textContent = speedStr;
+
+    const tdStatus = document.createElement("td");
+    tdStatus.classList.add("status-cell", `status-${statusStr}`);
+    tdStatus.textContent = statusStr;
+
+    const tdUpdated = document.createElement("td");
+    tdUpdated.textContent = formatUpdated(chain.updated);
+
+    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus, tdUpdated);
+    tbody.appendChild(tr);
+  });
 }
 
 // ----- Lifecycle -----
