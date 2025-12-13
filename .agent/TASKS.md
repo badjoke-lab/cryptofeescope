@@ -150,6 +150,82 @@ Cloudflare Pages 上の UI を「最低限、公開に耐える」レベルま�
 * 同時に `title` 属性にフルの値＋通貨コードを入れる。
   例: `title="2.76963 USD"` や `title="0.000000000123 USD"`。
 
+## Task B-1′ — Fee number formatting 完全対応
+
+**目的（Goal）**
+`app.js` の Fee 表示ロジックを、これまで決めたルールどおりに **最後まで実装** する。
+「小さい値は `< 0.000001` 表示＋ツールチップ」「大きい値は k / m 省略」などをすべて反映させる。
+
+**対象ファイル**
+
+* `app.js` のみ（既存の HTML / CSS 構造は壊さないこと）
+
+**やること（What to do）**
+
+1. `formatFiat(value)` を、次の仕様で書き換える。
+
+   * 入力: `number | null | undefined`
+   * 戻り値: **表示用文字列（プレーンテキスト）**
+
+   ルール:
+
+   1. `value == null` または `NaN`
+      → `"—"` を返す。
+
+   2. `abs = Math.abs(value)` を使う。
+
+   3. **超小さい値**
+
+      * `0 < abs < 1e-6`（= 0.000001） の場合
+        → 常に文字列 `"< 0.000001"` を返す。
+        → 科学的記法（`1.23e-4` 等）は一切使わない。
+
+   4. **小さいがしきい値以上**
+
+      * `1e-6 <= abs < 0.01` の場合
+        → `value.toFixed(6)` を基準にし、末尾の `0` と不要な小数点を削ってよい。
+        例: `"0.010000"` → `"0.01"`, `"0.000100"` → `"0.0001"`。
+
+   5. **通常の範囲**
+
+      * `0.01 <= abs < 1000` の場合
+        → `value.toFixed(3)` を返す（`1.860` など）。
+        末尾0を残すかどうかはどちらでもよいが、実装内で統一すること。
+
+   6. **大きい値**
+
+      * `abs >= 1000` の場合
+        → `k / m` 省略表記にする。
+
+        例（小数2桁程度でOK）:
+
+        * `1234` → `"1.23k"`
+        * `45678` → `"45.7k"`
+        * `1234567` → `"1.23m"`
+
+   7. **符号**
+
+      * 負の値の場合は、先頭に `-` を付ける（`-1.23k` など）。
+
+2. Feeセルに **ツールチップで正確な値を入れる処理** を追加する。
+
+   * `renderTable()` 内で Fee を描画している箇所を修正し、
+
+     * 表示には `formatFiat(fee)` の戻り値を使う。
+     * 同じ `td` に `title` 属性を付け、そこに **生の値＋通貨コード** を入れる。
+
+       例（USD表示中）:
+
+       ```html
+       <td class="fee-cell" title="0.000000000123 USD">0.000001</td>
+       ```
+
+   * ツールチップの内容は、少なくとも
+     `"{rawValue} {CURRENCY}"` 形式にすること。
+     （`rawValue` は丸め前の数値を文字列化したもの。）
+
+3. 既存のIDやイベント（`#fee-table-body`, `#fee-header` 等）は変更しない。
+
 ### B-2. Tier handling（Phase 1 は入口だけ）
 
 * スナップショット JSON には `tiers`（配列）が存在しうる前提とする。
@@ -163,6 +239,91 @@ Cloudflare Pages 上の UI を「最低限、公開に耐える」レベルま�
 
 * まだ **モーダル / ドロップダウンの実装は不要**。
   後で tier 詳細を実装できるようにするための“目印”だけ用意する。
+
+## Task B-2′ — Tier入口の UI 実装
+
+**目的（Goal）**
+`tiers` が存在するチェーンについて、テーブルから **「複数tierがある」ことが分かる入口** を用意する。
+このタスクでは、モーダルや詳細ポップアップまでは作らない。
+
+**対象ファイル**
+
+* メイン: `app.js`
+* 必要であれば、見た目調整のために `style.css` に **小さなクラス追加のみ可**
+  （既存クラスの大改造はしない）
+
+**やること（What to do）**
+
+1. `renderTable()` を、`tiers` を考慮したロジックに修正する。
+
+   * 各 `chain` につき、次のように判断する：
+
+     ```js
+     const hasTiers = Array.isArray(chain.tiers) && chain.tiers.length > 0;
+     ```
+
+   * **Standard tier として使う値**
+
+     * `hasTiers` の場合:
+
+       * `const baseTier = chain.tiers[0];`
+       * Fee表示に使う値は `baseTier.feeUSD / baseTier.feeJPY`。
+     * `hasTiers` でない場合:
+
+       * これまでどおり `chain.feeUSD / chain.feeJPY` を使う。
+
+   * Feeセル表示用テキスト:
+
+     * `const displayFee = formatFiat(selectedFee);` を使う。
+
+2. **複数tierがあることを示すヒントテキスト** を Feeセルに追加する。
+
+   * `hasTiers && chain.tiers.length > 1` の場合:
+
+     * `extraCount = chain.tiers.length - 1` を計算し、
+     * Feeセルの中に小さなサブテキストを追加する。
+
+       例:
+
+       ```html
+       <td class="fee-cell" title="...">
+         0.000005
+         <div class="fee-tier-hint">Standard · +2 tiers</div>
+       </td>
+       ```
+
+   * この `fee-tier-hint` 用のCSSを `style.css` に追加してよい（フォントサイズを小さく / 色を薄くする程度）。
+
+3. Feeセルの `title` には、tier情報も含める。
+
+   * `hasTiers` の場合は、簡単なテキストでよいので tier 列挙を入れる。
+
+     例:
+
+     ```text
+     Standard: 0.000005 XRP; Fast: 0.000010 XRP; Slow: 0.000020 XRP
+     ```
+
+   * `hasTiers` でない場合は、従来どおり
+     `"0.012 USD"` など単一値だけでよい。
+
+4. **スコープから外すこと**
+
+   * モーダル表示・詳細ポップオーバーなどのリッチUIはここでは実装しない。
+   * tiers に応じて行の高さやレイアウトを大きく変えるリファクタはしない。
+   * Worker / 共通API / 自動更新ロジックには触れない。
+
+**完了条件（Done）**
+
+* `data/fee_snapshot_demo.json` に `tiers` があるチェーンで：
+
+  * テーブルの Fee列が `tiers[0]` ベースの値を表示している。
+  * `tiers.length > 1` の行には「Standard · +N tiers」風のヒントが出ている。
+  * Feeセルの `title` に、tier一覧または正確なfeeの情報が入っている。
+
+* `tiers` のないチェーンは、これまでと同じように表示される（壊れていない）。
+
+* スマホ（幅360px）でも、tierヒントの追加によって横スクロールが発生していない。
 
 ### B-3. レイアウト調整（モバイル & デスクトップ）
 
