@@ -234,7 +234,132 @@ Phase 1 の状態が外部から見ても分かるように、ドキュメント
 
 ---
 
-## Task D — 後続フェーズのためのメモ（実装はまだ）
+## Task D — 24h 変化率の追加（Phase 1.5, Part 1）
+
+**目的（Goal）**
+CoinGecko Demo API から各チェーンの **24時間価格変化率** を取得し、
+`scripts/generate_fee_snapshot_demo.js` とフロントエンド両方に反映する。
+
+**やること（What to do）**
+
+1. **スナップショット生成スクリプトの拡張**
+
+   * `scripts/generate_fee_snapshot_demo.js` を修正し、CoinGecko `/simple/price` を叩く際に
+     `include_24hr_change=true` を付けてリクエストする。
+   * レスポンス中の `usd_24h_change`（あれば `jpy_24h_change` も）を読み取り、
+     各チェーンごとに `priceChange24hPct` プロパティを追加して `fee_snapshot_demo.json` に保存する。
+
+     * 値は **USDベースの変化率** を優先（`number`。例: `3.25` = +3.25%）。
+     * 取得できなかった場合は `null` またはプロパティ自体を省略する（どちらかに統一）。
+
+2. **フロントエンドのテーブル列追加**
+
+   * 現行のテーブルに **「24h change」列** を追加し、`priceChange24hPct` を表示する。
+   * 表示ルール（例）:
+
+     * `+3.2% / -1.8%` のように **符号付き・小数1桁** で表示。
+     * 正の値は `class="change-pos"`、負の値は `class="change-neg"`、ほぼ0は `class="change-flat"` などCSSクラスで色分け。
+   * モバイル 360px では、レイアウトが崩れる場合に備えて：
+
+     * 必要であれば 24h 列を幅の小さいテキストにするか、
+     * もしくは `@media (max-width: 480px)` でフォントを少し小さくする程度にとどめる。
+     * **横スクロールが発生しないこと** を優先。
+
+3. **ツールチップ・アクセシビリティ**
+
+   * 24h列のセルに `title` 属性を付与し、内部値をそのまま表示（例: `title="+3.25% over last 24h"`）。
+   * 値が `null` / 欠損の場合は `–` を表示し、`title` も「No 24h data (demo API)」のように分かる文言にする。
+
+4. **ドキュメント軽修正**
+
+   * README か `docs/fee_snapshot_schema.md` に `priceChange24hPct` フィールドを追記して、
+     「CoinGecko Demo API から取得できた範囲でのみ埋まる補助指標」であることを書いておく。
+
+**スコープ外（Out of scope）**
+
+* 24h 以外の変化率（7d, 30dなど）
+* 履歴保存やグラフ描画
+* Cloudflare Worker / 共通API への移行（これは Task E 以降で扱う）
+
+**完了条件（Done）**
+
+* `data/fee_snapshot_demo.json` に全チェーン分の `priceChange24hPct` が追加されている（Demo API が返せる範囲）。
+* テーブルに「24h change」列が表示され、値のあるチェーンでは `%` 表示が行われている。
+* モバイル 360px 幅で **横スクロールが発生せず**、レイアウトが破綻していない。
+* README / スキーマに新フィールドが明記されている。
+
+---
+
+## Task E — UI 追加調整＆ステータス凡例（Phase 1.5, Part 2）
+
+**目的（Goal）**
+Phase 1 のテーブル UI をさらに整えて、
+特に **モバイル 360px での可読性** と **ステータスの意味の分かりやすさ** を改善する。
+
+**やること（What to do）**
+
+1. **Status バッジ凡例（Legend）の追加**
+
+   * Snapshot controls カードの下部かテーブルの直上に、小さな凡例ブロックを追加する。
+   * 例：
+
+     * `Fast ≈ 数秒〜数十秒`
+     * `Normal ≈ 数分`
+     * `Slow ≈ 10分以上`
+   * 既存の `status` クラス（`fast`, `normal`, `slow` など）と色が対応していることが分かるように表示。
+   * 英語＋簡単な日本語の **併記**（例: `Fast（速い）`）にする。
+
+2. **モバイル 360px レイアウトの再調整**
+
+   * CSS（`style.css`）を調整し、360px 幅で次を満たすようにする：
+
+     * テーブル全体に **横スクロールバーが出ない**。
+     * チェーン名とティッカーは **2行までで折り返し**、それ以上は `text-overflow: ellipsis` 等で省略。
+     * Fee / Speed / Status / Updated は **列幅が狭くなっても数字が読める** フォントサイズにする。
+   * 必要であれば：
+
+     * `table-layout: fixed;`
+     * 一部列に `white-space: nowrap;` と `min-width` を設定し、
+       それ以外の列に折り返しを許可する。
+
+3. **ヘッダー＆スナップショット情報の整理**
+
+   * ヘッダーの「Updated yyyy/mm/dd hh:mm:ss」は
+     `fee_snapshot_demo.generatedAt` に連動していることを前提に、
+     **日付と時刻のフォーマットを短めに統一**（例：`2024-06-01 21:00`）。
+   * スマホでは Updated バッジの幅が広すぎて詰まって見える場合、
+
+     * フォントサイズを一段階小さくする、
+     * もしくは行を2段組（タイトル行＋Updated行）に分けるなど、
+       文字が潰れないよう微調整。
+
+4. **コピー微修正**
+
+   * Snapshot controls カード内の説明文を、
+     「Cloudflare Pages の preview build」「Demo snapshot」「CoinGecko Demo」などのキーワードを含みつつ、
+     **2〜3文程度に短く整理**して読みやすくする。
+   * 既存の About / Data Sources / Disclaimer へのリンクはそのまま利用。
+
+**スコープ外（Out of scope）**
+
+* ダークモードテーマの再設計（既存テーマ切り替えの範囲を超える変更）
+* テーブル以外の新コンポーネント（カード型リスト等）への全面リデザイン
+* Cloudflare Worker / 自動更新ロジックそのもの（別 Task 予定）
+
+**完了条件（Done）**
+
+* モバイル 360px 実機で：
+
+  * 横スクロールが出ない。
+  * 各行の主要情報（チェーン名 / Fee / Speed / Status / Updated / 24h）が
+    無理なく読めるレイアウトになっている。
+* ステータス凡例が追加され、「Fast / Normal / Slow 等の意味」が UI 上で分かる。
+* Updated バッジの表示が読みやすく整理されている。
+* テキスト（英語＋日本語）が「公開しても違和感のないレベル」に整っている。
+
+---
+
+## Task F — 後続フェーズのためのメモ（実装はまだ）
 
 > 実装はしなくてよい。コード内コメントか
 > `docs/notes-phase2+.md` のようなファイルで、将来の勘所を残しておく。
@@ -246,3 +371,5 @@ Phase 1 の状態が外部から見ても分かるように、ドキュメント
 * WCWD との共通API（`/v1/{service}/{endpoint}`）導入は **Phase 2 以降で行う** ことを明記する。
 
 ---
+
+
