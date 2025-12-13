@@ -263,6 +263,20 @@ tbody tr:hover{
 .status-cell.status-normal{color:var(--muted);}
 .status-cell.status-slow{color:var(--warn);}
 .status-cell.status-unknown{color:var(--muted);}
+.change-cell{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.change-pos{
+  color:#0a8f3c;
+}
+.change-neg{
+  color:#c62828;
+}
+.change-flat{
+  color:inherit;
+  opacity:.8;
+}
 
 /* Details 列（▾ボタン） */
 .col-details{
@@ -399,7 +413,7 @@ footer .note{
 
 @media(max-width:480px){
   thead th,
-  tbody td{padding:10px;}
+  tbody td{padding:4px 6px;font-size:12px;}
   .updated::before{
     content:"🕒 ";
     margin-right:2px;
@@ -410,6 +424,10 @@ footer .note{
 
   .filters{
     flex-direction:column;
+  }
+
+  .change-cell{
+    font-size:11px;
   }
 }
 

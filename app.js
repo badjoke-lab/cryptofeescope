@@ -185,6 +185,20 @@ function renderTable() {
     const feeStr = formatFiat(fee);
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const statusStr = chain.status || "unknown";
+    const change = chain.priceChange24hPct;
+    let changeText = "—";
+    let changeClass = "change-flat";
+    let changeTitle = "No 24h data (demo API)";
+
+    if (typeof change === "number" && !Number.isNaN(change)) {
+      const sign = change > 0 ? "+" : "";
+      const rounded = change.toFixed(1);
+      changeText = `${sign}${rounded}%`;
+      changeTitle = `${sign}${change.toFixed(2)}% over last 24h`;
+
+      if (change > 0.1) changeClass = "change-pos";
+      else if (change < -0.1) changeClass = "change-neg";
+    }
 
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
     const ticker = (key || "?").toUpperCase();
@@ -212,6 +226,11 @@ function renderTable() {
       tdFee.appendChild(tierNote);
     }
 
+    const tdChange = document.createElement("td");
+    tdChange.classList.add("change-cell", changeClass);
+    tdChange.textContent = changeText;
+    tdChange.title = changeTitle;
+
     const tdSpeed = document.createElement("td");
     tdSpeed.textContent = speedStr;
 
@@ -222,7 +241,7 @@ function renderTable() {
     const tdUpdated = document.createElement("td");
     tdUpdated.textContent = formatUpdated(chain.updated);
 
-    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus, tdUpdated);
+    tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus, tdUpdated);
     tbody.appendChild(tr);
   });
 }
