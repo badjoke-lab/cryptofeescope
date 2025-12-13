@@ -128,7 +128,7 @@ function formatFiat(value) {
   }
 
   if (abs === 0) {
-    return `${sign}0.000`;
+    return "0.000";
   }
 
   if (abs >= 1e-6 && abs < 0.01) {
@@ -137,8 +137,8 @@ function formatFiat(value) {
   }
 
   if (abs >= 0.01 && abs < 1000) {
-    const fixed = abs.toFixed(3);
-    return `${sign}${fixed}`;
+    const fixed = value.toFixed(3);
+    return fixed;
   }
 
   const suffix = abs >= 1_000_000 ? "m" : "k";
@@ -175,25 +175,26 @@ function renderTable() {
 
   Object.entries(chains).forEach(([key, chain]) => {
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
+    const currencyCode = currency.toUpperCase();
     const hasTiers = Array.isArray(chain.tiers) && chain.tiers.length > 0;
     const tiers = hasTiers ? chain.tiers : [];
     const baseTier = hasTiers ? tiers[0] : null;
-    const fee =
+    const rawFee =
       baseTier && typeof baseTier[currencyKey] === "number"
         ? baseTier[currencyKey]
         : chain[currencyKey];
 
-    const feeStr = formatFiat(fee);
+    const displayFee = formatFiat(rawFee);
     let feeTitle =
-      fee != null && !Number.isNaN(fee)
-        ? `${toPlainNumberString(fee)} ${currency.toUpperCase()}`
+      Number.isFinite(rawFee) && rawFee != null
+        ? `${toPlainNumberString(rawFee)} ${currencyCode}`
         : "";
     if (hasTiers) {
       const entries = tiers
         .map((tier) => {
           const feeValue = tier ? tier[currencyKey] : null;
           if (typeof feeValue !== "number" || Number.isNaN(feeValue)) return null;
-          const raw = `${toPlainNumberString(feeValue)} ${currency.toUpperCase()}`;
+          const raw = `${toPlainNumberString(feeValue)} ${currencyCode}`;
           const label = tier.label
             ? tier.label.charAt(0).toUpperCase() + tier.label.slice(1)
             : "Tier";
@@ -237,7 +238,7 @@ function renderTable() {
 
     const tdFee = document.createElement("td");
     tdFee.classList.add("fee-cell");
-    tdFee.textContent = feeStr;
+    tdFee.textContent = displayFee;
     if (feeTitle) {
       tdFee.title = feeTitle;
     }
