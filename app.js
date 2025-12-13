@@ -175,14 +175,35 @@ function renderTable() {
 
   Object.entries(chains).forEach(([key, chain]) => {
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
-    const tiers = Array.isArray(chain.tiers) ? chain.tiers : [];
-    const standardTier = tiers[0];
+    const hasTiers = Array.isArray(chain.tiers) && chain.tiers.length > 0;
+    const tiers = hasTiers ? chain.tiers : [];
+    const baseTier = hasTiers ? tiers[0] : null;
     const fee =
-      standardTier && typeof standardTier[currencyKey] === "number"
-        ? standardTier[currencyKey]
+      baseTier && typeof baseTier[currencyKey] === "number"
+        ? baseTier[currencyKey]
         : chain[currencyKey];
 
     const feeStr = formatFiat(fee);
+    let feeTitle =
+      fee != null && !Number.isNaN(fee)
+        ? `${toPlainNumberString(fee)} ${currency.toUpperCase()}`
+        : "";
+    if (hasTiers) {
+      const entries = tiers
+        .map((tier) => {
+          const feeValue = tier ? tier[currencyKey] : null;
+          if (typeof feeValue !== "number" || Number.isNaN(feeValue)) return null;
+          const raw = `${toPlainNumberString(feeValue)} ${currency.toUpperCase()}`;
+          const label = tier.label
+            ? tier.label.charAt(0).toUpperCase() + tier.label.slice(1)
+            : "Tier";
+          return `${label}: ${raw}`;
+        })
+        .filter(Boolean);
+      if (entries.length > 0) {
+        feeTitle = entries.join("; ");
+      }
+    }
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const statusStr = chain.status || "unknown";
     const change = chain.priceChange24hPct;
@@ -217,14 +238,17 @@ function renderTable() {
     const tdFee = document.createElement("td");
     tdFee.classList.add("fee-cell");
     tdFee.textContent = feeStr;
-    if (fee != null && !Number.isNaN(fee)) {
-      tdFee.title = `${toPlainNumberString(fee)} ${currency.toUpperCase()}`;
+    if (feeTitle) {
+      tdFee.title = feeTitle;
     }
 
-    if (tiers.length > 1) {
+    if (hasTiers && tiers.length > 1) {
       const tierNote = document.createElement("div");
-      tierNote.classList.add("tier-note");
-      tierNote.textContent = `Standard · +${tiers.length - 1} tiers`;
+      const baseLabel = baseTier?.label
+        ? baseTier.label.charAt(0).toUpperCase() + baseTier.label.slice(1)
+        : "Standard";
+      tierNote.classList.add("fee-tier-hint");
+      tierNote.textContent = `${baseLabel} · +${tiers.length - 1} tiers`;
       tdFee.appendChild(tierNote);
     }
 

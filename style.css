@@ -283,6 +283,12 @@ tbody tr:hover{
 }
 .fee{font-weight:700}
 .fee-cell{font-weight:700;}
+.fee-cell .fee-tier-hint{
+  margin-top:2px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.3;
+}
 .fee-cell .tier-note{
   margin-top:2px;
   color:var(--muted);
