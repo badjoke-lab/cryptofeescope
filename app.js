@@ -21,8 +21,13 @@
 const THEME_KEY = 'cfs-theme';
 
 function getInitialTheme() {
-  const stored = localStorage.getItem(THEME_KEY);
-  if (stored === 'dark' || stored === 'light') return stored;
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'dark' || stored === 'light') return stored;
+  } catch (e) {
+    // localStorage 使えない環境ではデフォルトにフォールバック
+  }
+
   return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
     : 'light';
@@ -32,18 +37,47 @@ function applyTheme(theme) {
   const t = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', t);
   document.body.classList.toggle('dark', t === 'dark');
-  localStorage.setItem(THEME_KEY, t);
+  try {
+    localStorage.setItem(THEME_KEY, t);
+  } catch (e) {
+    // localStorage エラーは無視
+  }
 }
 
 // ----- Snapshot fetch -----
-const SNAPSHOT_URL = "/data/fee_snapshot_demo.json";
+// Cloudflare Pages の公開ルート: /
+// リポジトリ構成: cryptofeescope/data/fee_snapshot_demo.json
+// → ブラウザからは /data/fee_snapshot_demo.json でアクセスできる
+const SNAPSHOT_URL = "data/fee_snapshot_demo.json";
 
 async function fetchFeeSnapshot() {
   const res = await fetch(SNAPSHOT_URL, { cache: "no-store" });
+
   if (!res.ok) {
+    // 404 や 500 ならここで止める
+    const text = await res.text().catch(() => "");
+    console.error("Failed to load fee snapshot:", res.status, text.slice(0, 200));
     throw new Error(`Failed to load fee snapshot: ${res.status}`);
   }
-  return res.json();
+
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+
+  // JSON ではなく HTML (例: 404で index.html が返ってくる) の場合、
+  // Unexpected token '<' を避けて原因をログに出す
+  if (!contentType.includes("application/json") && text.trim().startsWith("<")) {
+    console.error("Snapshot response is HTML, not JSON. Check file path /data/fee_snapshot_demo.json.");
+    console.error(text.slice(0, 200));
+    throw new Error("Snapshot is not JSON. Maybe /data/fee_snapshot_demo.json is missing or misconfigured.");
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Failed to parse snapshot JSON:", e);
+    console.error("Raw text snippet:", text.slice(0, 200));
+    throw e;
+  }
 }
 
 // ----- State & formatters -----
