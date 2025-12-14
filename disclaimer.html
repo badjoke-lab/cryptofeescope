@@ -3,78 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Disclaimer • CryptoFeeScope</title>
+  <title>CryptoFeeScope – Disclaimer</title>
+  <meta name="description" content="CryptoFeeScope provides indicative, demo-grade fee estimates only. Verify costs before transacting." />
+  <link rel="canonical" href="https://cryptofeescope.pages.dev/disclaimer.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="CryptoFeeScope" />
+  <meta property="og:title" content="CryptoFeeScope – Disclaimer" />
+  <meta property="og:description" content="CryptoFeeScope provides indicative, demo-grade fee estimates only. Verify costs before transacting." />
+  <meta property="og:url" content="https://cryptofeescope.pages.dev/disclaimer.html" />
+  <meta property="og:image" content="assets/og-cryptofeescope.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="CryptoFeeScope – Disclaimer" />
+  <meta name="twitter:description" content="CryptoFeeScope provides indicative, demo-grade fee estimates only. Verify costs before transacting." />
+  <meta name="twitter:image" content="assets/og-cryptofeescope.png" />
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="brand">
-        <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
-        <div>
-          <div>CryptoFeeScope</div>
-          <div style="font-size:11px;color:var(--muted);">Disclaimer</div>
+      <a class="brand-link" href="/">
+        <div class="brand">
+          <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
+          <div>
+            <div>CryptoFeeScope</div>
+            <div class="sub">Disclaimer</div>
+          </div>
         </div>
-      </div>
+      </a>
       <div class="spacer"></div>
-      <a href="./index.html" class="btn" style="text-decoration:none;">← Back</a>
-      <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+      <div class="toolbar">
+        <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="bar-line" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
+    <nav class="global-nav" id="global-nav">
+      <div class="global-nav-inner">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/roadmap.html">Roadmap</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/data-sources.html">Data Sources</a></li>
+          <li><a href="/donate.html">Donate</a></li>
+          <li><a href="/disclaimer.html">Disclaimer</a></li>
+        </ul>
+      </div>
+    </nav>
   </header>
 
   <main class="single">
-      <div class="card">
-        <div class="inner">
-          <h2 style="margin-top:0;">Disclaimer</h2>
-          <p>
-            The fees and timing information shown on CryptoFeeScope are
-            <strong>estimates</strong> based on public data and general assumptions.  
-            Actual transaction costs and confirmation times may differ significantly,
-            depending on network conditions, wallet behavior, and exchange policies.
-          </p>
+    <div class="card">
+      <div class="inner">
+        <h2 style="margin-top:0;">Disclaimer</h2>
+        <p>
+          CryptoFeeScope is a demonstration dashboard. The current data set comes from the CoinGecko Demo API and is refreshed by
+          GitHub Actions. It is provided for reference only and may lag real network conditions.
+        </p>
 
-          <ul>
-            <li>
-              CryptoFeeScope does <strong>not</strong> provide investment advice or recommendations.
-            </li>
-            <li>
-              The operator of this site is not responsible for any loss or damage
-              arising from actions taken based on the information displayed here.
-            </li>
-            <li>
-              The inclusion of any chain or token on this site does not imply
-              any guarantee regarding its “official” status, safety, or reliability.
-            </li>
-          </ul>
+        <ul>
+          <li>Fee estimates do not constitute investment advice or transaction guidance.</li>
+          <li>Always confirm actual costs in your wallet or on-chain explorer before sending funds.</li>
+          <li>Statuses (Fast / Avg / Slow) are indicative labels based on typical block times.</li>
+          <li>No warranty is provided; use at your own risk.</li>
+        </ul>
 
-          <p class="hint">
-            For important transfers, always double-check official documentation,
-            destination addresses, and network settings.  
-            Use this dashboard only as one reference among many, at your own risk.
-          </p>
-        </div>
+        <p class="hint">If you notice a discrepancy between the dashboard and on-chain data, please double-check the source feed or wait for the next refresh.</p>
       </div>
+    </div>
   </main>
 
   <footer>
     <div class="inner">
       <div class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"
-          viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
         <strong>CryptoFeeScope</strong>
       </div>
-      <div style="margin-top:6px">
-        <a href="./about.html" style="color:var(--muted)">About</a> ·
-        <a href="./roadmap.html" style="color:var(--muted)">Roadmap</a> ·
-        <a href="./data-sources.html" style="color:var(--muted)">Data Sources</a> ·
-        <a href="./donate.html" style="color:var(--muted)">Donate</a> ·
-        <a href="./disclaimer.html" style="color:var(--muted)">Disclaimer</a>
+      <div class="links">
+        <a href="/">Home</a> ·
+        <a href="/about.html">About</a> ·
+        <a href="/roadmap.html">Roadmap</a> ·
+        <a href="/data-sources.html">Data Sources</a> ·
+        <a href="/donate.html">Donate</a> ·
+        <a href="/disclaimer.html">Disclaimer</a>
       </div>
+      <div class="note">© 2025 badjoke-lab</div>
     </div>
   </footer>
 
   <script>
-    (function initTheme(){
+    (function initPage(){
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       const saved = localStorage.getItem('theme');
       const theme = saved || (prefersDark ? 'dark' : 'light');
@@ -88,10 +106,31 @@
           localStorage.setItem('theme', now);
         });
       }
+
+      const nav = document.getElementById('global-nav');
+      const toggle = document.getElementById('nav-toggle');
+      const sync = () => {
+        if (!nav || !toggle) return;
+        if (window.innerWidth > 768) {
+          nav.classList.add('open');
+          toggle.setAttribute('aria-expanded', 'true');
+        } else {
+          nav.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      };
+      if (nav && toggle){
+        toggle.addEventListener('click', () => {
+          const isOpen = nav.classList.toggle('open');
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        window.addEventListener('resize', sync);
+        sync();
+      }
     })();
   </script>
   <!-- Cloudflare Web Analytics -->
-  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475ee54e4"}'></script>
   <!-- End Cloudflare Web Analytics -->
 </body>
 </html>

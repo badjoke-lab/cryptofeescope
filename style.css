@@ -49,14 +49,12 @@ body{
   min-height:100vh;
 }
 
-a{
-  color:inherit;
-}
+a{color:inherit;}
 
 .toolbar a,
-a.btn{
-  text-decoration:none;
-}
+a.btn,
+.brand-link,
+.global-nav a{color:inherit;text-decoration:none;}
 
 /* Header */
 header{
@@ -77,6 +75,7 @@ header{
   margin:0 auto;
   padding:10px 16px;
 }
+.brand-link{display:flex;align-items:center;gap:10px;}
 .brand{
   display:flex;
   align-items:center;
@@ -89,23 +88,20 @@ header{
   font-size:12px;
   color:var(--muted);
 }
-.pill{
-  font-size:12px;
-  border:1px solid var(--line);
-  border-radius:999px;
-  padding:2px 8px;
-  color:var(--muted);
-  white-space:nowrap;
-}
-.updated-label{
-  font-size:12px;
-  opacity:0.9;
-}
+.updated-label{font-size:13px;font-weight:600;color:var(--fg);margin:6px 0 10px;}
 .spacer{flex:1}
 .toolbar{
   display:flex;
   gap:8px;
 }
+
+.nav-toggle{display:none;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line);border-radius:10px;background:transparent;cursor:pointer;}
+.nav-toggle .bar-line{display:block;width:16px;height:2px;background:var(--fg);border-radius:1px;box-shadow:0 5px var(--fg),0 -5px var(--fg);}
+
+.global-nav{border-top:1px solid var(--line);}
+.global-nav-inner{max-width:1100px;margin:0 auto;padding:0 16px;}
+.global-nav ul{list-style:none;margin:0;padding:8px 0;display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+.global-nav a{font-weight:600;font-size:13px;}
 
 /* Buttons */
 .btn{
@@ -254,6 +250,7 @@ tbody tr:hover{
   display:flex;
   flex-direction:column;
   gap:2px;
+  min-width:150px;
 }
 .fee-table .chain-label{font-weight:700;}
 .fee-table .chain-ticker{
@@ -446,6 +443,14 @@ footer .note{
 .hidden{display:none!important}
 
 /* Responsive tweaks */
+@media(min-width:769px){
+  .nav-toggle{display:none;}
+  .global-nav{max-height:none!important;overflow:visible;}
+  .global-nav ul{justify-content:flex-start;}
+  .fee-table .chain-cell{flex-direction:row;align-items:center;gap:8px;white-space:nowrap;}
+  .fee-table .chain-label{font-size:14px;}
+}
+
 @media(max-width:768px){
   .brand .sub{display:none;}
   .bar{
@@ -453,7 +458,6 @@ footer .note{
     flex-wrap:wrap;
   }
   .brand,
-  .pill,
   .toolbar{width:100%;}
   .toolbar{
     gap:6px;
@@ -461,6 +465,10 @@ footer .note{
     flex-wrap:wrap;
   }
   main{padding:0 14px 20px;}
+  .nav-toggle{display:inline-flex;}
+  .global-nav{overflow:hidden;max-height:0;transition:max-height .25s ease;}
+  .global-nav.open{max-height:280px;}
+  .global-nav ul{flex-direction:column;align-items:flex-start;padding:10px 16px;}
 }
 
 @media(min-width:481px){

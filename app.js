@@ -342,6 +342,30 @@ function bindCurrencyButtons() {
   syncActive();
 }
 
+function bindNavToggle() {
+  const nav = document.getElementById("global-nav");
+  const toggle = document.getElementById("nav-toggle");
+  if (!nav || !toggle) return;
+
+  const syncForViewport = () => {
+    if (window.innerWidth > 768) {
+      nav.classList.add("open");
+      toggle.setAttribute("aria-expanded", "true");
+    } else {
+      nav.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  };
+
+  toggle.addEventListener("click", () => {
+    const isOpen = nav.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  window.addEventListener("resize", syncForViewport);
+  syncForViewport();
+}
+
 // ----- Init -----
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme(getInitialTheme());
@@ -362,6 +386,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   bindCurrencyButtons();
+  bindNavToggle();
   loadSnapshotAndRender();
   setInterval(loadSnapshotAndRender, 60_000);
 });
