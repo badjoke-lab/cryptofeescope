@@ -57,17 +57,17 @@
       <div class="pill">Updated <span id="updated-label" class="updated-label">—</span></div>
       <div class="spacer"></div>
       <div class="toolbar">
-        <!-- Refresh = 緑のボタン -->
+        <!-- Refresh button (green) -->
         <button id="refresh-button" class="btn btn-primary" type="button">
           <span class="icon" aria-hidden="true">🔄</span>
           <span class="label">Refresh</span>
         </button>
-        <!-- Donate = ゴーストボタン -->
+        <!-- Donate button (ghost style) -->
         <a href="donate.html" class="btn btn-ghost">
           <span class="icon" aria-hidden="true">💎</span>
           <span class="label">Donate</span>
         </a>
-        <!-- Theme toggle（絵文字のみ） -->
+        <!-- Theme toggle (icon only) -->
         <button id="themeBtn" class="btn btn-ghost" type="button" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">🌞</span>
         </button>
@@ -85,9 +85,10 @@
             <code>/data/fee_snapshot_demo.json</code>.
           </p>
           <p>
-            Fees are indicative only (not investment advice) and refreshed on demand with the buttons below. ※ デモ版の参考手数料です。
+            Fees are indicative only (not investment advice) and refreshed on demand with the buttons below. This demo is for
+            reference only; actual transaction costs and confirmation times may vary.
           </p>
-          <p class="hint">We plan to ship historical trends and EUR toggle in later revisions.</p>
+          <p class="hint">We plan to ship historical trends and an EUR toggle in later revisions.</p>
           <div class="currency-toggle">
             <button id="currency-usd" class="btn small" type="button">USD</button>
             <button id="currency-jpy" class="btn small" type="button">JPY</button>
@@ -101,9 +102,9 @@
           <div class="status-legend" aria-label="Status legend">
             <div class="status-legend-title">Status legend</div>
             <ul class="status-legend-list">
-              <li><span class="status-dot fast"></span>Fast（速い） ≈ a few seconds to tens of seconds</li>
-              <li><span class="status-dot normal"></span>Normal（通常） ≈ a few minutes</li>
-              <li><span class="status-dot slow"></span>Slow（遅い） ≈ 10+ minutes</li>
+              <li><span class="status-dot fast"></span>Fast  ≈ a few seconds to tens of seconds</li>
+              <li><span class="status-dot normal"></span>Normal ≈ a few minutes</li>
+              <li><span class="status-dot slow"></span>Slow  ≈ 10+ minutes</li>
             </ul>
           </div>
           <div class="fee-table-wrapper">
@@ -119,10 +120,10 @@
                 </tr>
               </thead>
               <tbody id="fee-table-body">
-                <!-- JS で描画 -->
+                <!-- Rendered via JS -->
               </tbody>
               <tbody id="fee-table-body-mobile">
-                <!-- JS で描画（モバイル専用） -->
+                <!-- Rendered via JS (mobile only) -->
               </tbody>
             </table>
           </div>
@@ -145,6 +146,7 @@
       </div>
       <div class="links">
         <a href="about.html">About</a> ·
+        <a href="roadmap.html">Roadmap</a> ·
         <a href="data-sources.html">Data Sources</a> ·
         <a href="donate.html">Donate</a> ·
         <a href="disclaimer.html">Disclaimer</a>
