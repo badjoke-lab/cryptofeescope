@@ -10,6 +10,7 @@
 //       speedSec: number,
 //       status: string,
 //       updated: string,
+//       priceChange24hPct?: number,
 //       native: { amount: number, symbol: string },
 //       source: { price: { provider: string, id: string } }
 //     }
@@ -184,6 +185,17 @@ function renderTable() {
         : "";
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const statusStr = chain.status || "unknown";
+    const changePct = chain.priceChange24hPct;
+    let changeText = "—";
+    let changeClass = "change-flat";
+    if (typeof changePct === "number" && Number.isFinite(changePct)) {
+      const magnitude = Math.abs(changePct);
+      const decimals = magnitude >= 1 ? 1 : 2;
+      const formatted = changePct.toFixed(decimals);
+      const sign = changePct > 0 ? "+" : changePct < 0 ? "" : "";
+      changeText = `${sign}${trimTrailingZeros(formatted)}%`;
+      changeClass = changePct > 0 ? "change-pos" : changePct < 0 ? "change-neg" : "change-flat";
+    }
 
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
     const ticker = (key || "?").toUpperCase();
@@ -196,10 +208,7 @@ function renderTable() {
     const chainLabelEl = document.createElement("div");
     chainLabelEl.classList.add("chain-label");
     chainLabelEl.textContent = chain.label || key;
-    const chainTickerEl = document.createElement("div");
-    chainTickerEl.classList.add("chain-ticker");
-    chainTickerEl.textContent = ticker;
-    tdChain.append(chainLabelEl, chainTickerEl);
+    tdChain.append(chainLabelEl);
 
     const tdTicker = document.createElement("td");
     tdTicker.classList.add("ticker-cell");
@@ -212,14 +221,19 @@ function renderTable() {
       tdFee.title = feeTitle;
     }
 
+    const tdChange = document.createElement("td");
+    tdChange.classList.add("change-cell", changeClass);
+    tdChange.textContent = changeText;
+
     const tdSpeed = document.createElement("td");
+    tdSpeed.classList.add("speed-cell");
     tdSpeed.textContent = speedStr;
 
     const tdStatus = document.createElement("td");
     tdStatus.classList.add("status-cell", `status-${statusStr}`);
     tdStatus.textContent = statusStr;
 
-    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus);
+    tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus);
     tbody.appendChild(tr);
   });
 }
