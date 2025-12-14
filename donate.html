@@ -68,7 +68,7 @@
               <h3>Support via Stripe</h3>
               <p>You can send a one-time tip via Stripe. No account required.</p>
               <div class="donate-actions">
-                <a class="donate-btn donate-btn-stripe" href="https://donate.stripe.com/" target="_blank" rel="noopener">
+                <a class="donate-btn donate-btn-stripe" href="https://buy.stripe.com/cNi8wI7oPcvS4x528zcIE00" target="_blank" rel="noopener noreferrer">
                   Donate with Stripe
                 </a>
               </div>
@@ -78,7 +78,7 @@
               <h3>Support via Ko-fi</h3>
               <p>If you prefer Ko-fi, you can send a small coffee here.</p>
               <div class="donate-actions">
-                <a class="donate-btn donate-btn-kofi" href="https://ko-fi.com/badjokelab" target="_blank" rel="noopener">
+                <a class="donate-btn donate-btn-kofi" href="https://ko-fi.com/badjoke_lab" target="_blank" rel="noopener noreferrer">
                   Visit Ko-fi page
                 </a>
               </div>
@@ -96,18 +96,55 @@
               <tr>
                 <th>Asset</th>
                 <th>Address</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>BTC</td><td><code class="wallet-address">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</code></td></tr>
-              <tr><td>ETH (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
-              <tr><td>USDT (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
-              <tr><td>USDC (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
-              <tr><td>SOL</td><td><code class="wallet-address">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</code></td></tr>
-              <tr><td>BNB (BEP-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
-              <tr><td>DOGE</td><td><code class="wallet-address">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</code></td></tr>
-              <tr><td>AVAX (C-Chain)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
-              <tr><td>XRP</td><td><code class="wallet-address">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</code></td></tr>
+              <tr>
+                <td>BTC</td>
+                <td><code class="wallet-address">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</code></td>
+                <td><button class="wallet-copy-btn" data-address="bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29">Copy</button></td>
+              </tr>
+              <tr>
+                <td>ETH (ERC-20)</td>
+                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
+                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
+              </tr>
+              <tr>
+                <td>USDT (ERC-20)</td>
+                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
+                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
+              </tr>
+              <tr>
+                <td>USDC (ERC-20)</td>
+                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
+                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
+              </tr>
+              <tr>
+                <td>SOL</td>
+                <td><code class="wallet-address">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</code></td>
+                <td><button class="wallet-copy-btn" data-address="Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx">Copy</button></td>
+              </tr>
+              <tr>
+                <td>BNB (BEP-20)</td>
+                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
+                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
+              </tr>
+              <tr>
+                <td>DOGE</td>
+                <td><code class="wallet-address">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</code></td>
+                <td><button class="wallet-copy-btn" data-address="DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU">Copy</button></td>
+              </tr>
+              <tr>
+                <td>AVAX (C-Chain)</td>
+                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
+                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
+              </tr>
+              <tr>
+                <td>XRP</td>
+                <td><code class="wallet-address">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</code></td>
+                <td><button class="wallet-copy-btn" data-address="rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm">Copy</button></td>
+              </tr>
             </tbody>
           </table>
           <p class="hint">If you want your name or org listed as a supporter on the roadmap page, reach out after donating.</p>
@@ -170,6 +207,50 @@
         window.addEventListener('resize', sync);
         sync();
       }
+
+      const copyButtons = Array.from(document.querySelectorAll('.wallet-copy-btn'));
+      const setButtonState = (btn, label) => {
+        if (!btn) return;
+        btn.textContent = label;
+      };
+      const resetLabel = (btn) => {
+        setTimeout(() => setButtonState(btn, 'Copy'), 1600);
+      };
+      const fallbackCopy = (text) => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          return document.execCommand('copy');
+        } catch (err) {
+          return false;
+        } finally {
+          document.body.removeChild(ta);
+        }
+      };
+      const copyAddress = async (btn, address) => {
+        if (!address) return;
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(address);
+          } else {
+            const ok = fallbackCopy(address);
+            if (!ok) throw new Error('Copy failed');
+          }
+          setButtonState(btn, 'Copied!');
+          resetLabel(btn);
+        } catch (err) {
+          alert('Could not copy address. Please copy manually.');
+        }
+      };
+
+      copyButtons.forEach((btn) => {
+        const address = btn?.dataset?.address || '';
+        btn.addEventListener('click', () => copyAddress(btn, address));
+      });
     })();
   </script>
   <!-- Cloudflare Web Analytics -->
