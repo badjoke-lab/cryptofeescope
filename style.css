@@ -463,61 +463,58 @@ footer .note{
   main{padding:0 14px 20px;}
 }
 
+@media(min-width:481px){
+  #fee-table-body-mobile{display:none;}
+}
+
 @media(max-width:480px){
   html,
   body{overflow-x:hidden;}
   .pill{white-space:normal;font-size:11px;}
   .updated-label{display:block;margin-top:4px;font-size:11px;}
+  #fee-table-body{display:none;}
+  #fee-table-body-mobile{display:table-row-group;}
   .fee-table{table-layout:auto;}
   thead{display:none;}
-  tbody tr{
-    display:grid;
-    grid-template-columns:repeat(4, minmax(0, 1fr));
-    grid-template-areas:
-      "chain chain ticker ticker"
-      "fee change speed status";
+  .fee-table-wrapper{overflow-x:hidden;}
+  #fee-table-body-mobile tr.fee-row-mobile{
     border-bottom:1px solid var(--line);
-    padding:0.15rem 0.2rem 0.25rem;
-    gap:4px 8px;
   }
-  tbody tr:last-child{border-bottom:0;}
-  tbody td{
-    padding:0;
-    border-bottom:0;
+  #fee-table-body-mobile tr.fee-row-mobile:last-child{border-bottom:0;}
+  #fee-table-body-mobile tr.fee-row-mobile td{
+    padding:0.35rem 0.55rem;
+    vertical-align:middle;
+  }
+  .fee-row-mobile{
+    font-size:13px;
+  }
+  .cell-mobile-left{
+    width:45%;
+    vertical-align:middle;
+    padding-right:0.4rem;
+  }
+  .cell-mobile-right{
+    width:55%;
+    vertical-align:middle;
+    padding-left:0.4rem;
+  }
+  .cell-mobile-left,.cell-mobile-right{word-break:break-word;}
+  .chain-name-mobile{font-weight:700;}
+  .chain-ticker-mobile{color:var(--muted);font-size:12px;}
+  .metrics-top,
+  .metrics-bottom{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    gap:4px;
     font-size:12px;
     line-height:1.4;
   }
-  .fee-table .chain-cell{
-    grid-area:chain;
-    display:flex;
-    flex-direction:row;
-    align-items:baseline;
-    gap:8px;
-    font-size:13px;
-    font-weight:700;
-    word-break:break-word;
-  }
-  .fee-table .chain-label{font-size:inherit;}
-  .fee-table .ticker-cell{
-    grid-area:ticker;
-    justify-self:end;
-    font-weight:700;
-    font-size:12px;
-    white-space:nowrap;
-  }
-  .fee-table .fee-cell{grid-area:fee;font-size:12px;font-weight:700;}
-  .fee-table .change-cell{
-    grid-area:change;
-    text-align:left;
-    font-size:12px;
-  }
-  .fee-table .speed-cell{
-    grid-area:speed;
-    white-space:nowrap;
-    font-size:12px;
-  }
-  .fee-table .status-cell{grid-area:status;font-size:12px;}
-  .fee-table-wrapper{overflow-x:hidden;}
+  .metrics-bottom{margin-top:2px;}
+  .fee-value-mobile{font-weight:700;}
+  .change-value-mobile{font-variant-numeric:tabular-nums;}
+  .speed-mobile{font-size:12px;}
+  .status-mobile{font-size:12px;text-transform:capitalize;}
   .card .inner{padding:12px;}
   .btn .label{display:none;}
   .btn{padding-inline:8px;}
