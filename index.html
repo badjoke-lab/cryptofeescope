@@ -2,12 +2,13 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
-  <title>CryptoFeeScope – L1 / L2 fee & latency snapshot</title>
+  <title>CryptoFeeScope – Live Crypto Transaction Fees</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta
     name="description"
-    content="CryptoFeeScope is a lightweight dashboard to compare L1 / L2 transaction fees and confirmation times at a glance."
+    content="CryptoFeeScope shows live, human-readable transaction fee estimates for major blockchains using CoinGecko Demo data."
   />
+  <link rel="canonical" href="https://cryptofeescope.pages.dev/" />
 
   <!-- Favicon -->
   <link rel="icon" href="assets/favicon.ico" />
@@ -15,26 +16,20 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="CryptoFeeScope" />
-  <meta
-    property="og:title"
-    content="CryptoFeeScope – L1 / L2 fee & latency snapshot"
-  />
+  <meta property="og:title" content="CryptoFeeScope – Live Crypto Transaction Fees" />
   <meta
     property="og:description"
-    content="Compare network fees & speed across major L1 / L2 chains on a single screen."
+    content="CryptoFeeScope shows live, human-readable transaction fee estimates for major blockchains using CoinGecko Demo data."
   />
-  <meta property="og:url" content="https://cryptofeescope.vercel.app/" />
+  <meta property="og:url" content="https://cryptofeescope.pages.dev/" />
   <meta property="og:image" content="assets/og-cryptofeescope.png" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta
-    name="twitter:title"
-    content="CryptoFeeScope – L1 / L2 fee & latency snapshot"
-  />
+  <meta name="twitter:title" content="CryptoFeeScope – Live Crypto Transaction Fees" />
   <meta
     name="twitter:description"
-    content="Compare L1 / L2 network fees & speed with a simple dashboard."
+    content="CryptoFeeScope shows live, human-readable transaction fee estimates for major blockchains using CoinGecko Demo data."
   />
   <meta name="twitter:image" content="assets/og-cryptofeescope.png" />
 
@@ -47,14 +42,15 @@
 <body>
   <header>
     <div class="bar">
-      <div class="brand">
-        <img src="assets/logo.svg" alt="CryptoFeeScope logo">
-        <div>
-          <div>CryptoFeeScope</div>
-          <div class="sub">L1 / L2 fee &amp; latency snapshot</div>
+      <a class="brand-link" href="/">
+        <div class="brand">
+          <img src="assets/logo.svg" alt="CryptoFeeScope logo">
+          <div>
+            <div>CryptoFeeScope</div>
+            <div class="sub">L1 / L2 fee &amp; latency snapshot</div>
+          </div>
         </div>
-      </div>
-      <div class="pill">Updated <span id="updated-label" class="updated-label">—</span></div>
+      </a>
       <div class="spacer"></div>
       <div class="toolbar">
         <!-- Refresh button (green) -->
@@ -71,8 +67,23 @@
         <button id="themeBtn" class="btn btn-ghost" type="button" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">🌞</span>
         </button>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="bar-line" aria-hidden="true"></span>
+        </button>
       </div>
     </div>
+    <nav class="global-nav" id="global-nav">
+      <div class="global-nav-inner">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/roadmap.html">Roadmap</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/data-sources.html">Data Sources</a></li>
+          <li><a href="/donate.html">Donate</a></li>
+          <li><a href="/disclaimer.html">Disclaimer</a></li>
+        </ul>
+      </div>
+    </nav>
   </header>
 
   <main>
@@ -81,19 +92,18 @@
         <div class="inner">
           <h2>Snapshot controls</h2>
           <p>
-            This is a demo snapshot served on Cloudflare Pages using the CoinGecko demo API at
-            <code>/data/fee_snapshot_demo.json</code>.
+            This live demo uses the CoinGecko Demo API via <code>/data/fee_snapshot_demo.json</code> hosted on Cloudflare Pages.
           </p>
           <p>
-            Fees are indicative only (not investment advice) and refreshed on demand with the buttons below. This demo is for
-            reference only; actual transaction costs and confirmation times may vary.
+            Fees are indicative only (not investment advice) and refresh automatically every minute or on demand with the Refresh button.
+            Actual transaction costs and confirmation times may vary.
           </p>
-          <p class="hint">We plan to ship historical trends and an EUR toggle in later revisions.</p>
+          <p class="hint">Historical trends and an EUR toggle remain on the roadmap.</p>
           <div class="currency-toggle">
             <button id="currency-usd" class="btn small" type="button">USD</button>
             <button id="currency-jpy" class="btn small" type="button">JPY</button>
           </div>
-          <p class="hint subtle">Coming soon: Token search &amp; bridge hints will appear here in later versions.</p>
+          <p class="hint subtle">Coming soon: token search, bridge hints, and more granular speed labels.</p>
         </div>
       </article>
 
@@ -107,6 +117,7 @@
               <li><span class="status-dot slow"></span>Slow  ≈ 10+ minutes</li>
             </ul>
           </div>
+          <p class="updated-label">Updated <span id="updated-label">—</span></p>
           <div class="fee-table-wrapper">
             <table class="fee-table">
               <thead>
@@ -142,18 +153,16 @@
           <path d="M8 15c1 .9 2.1 1.4 3.9 1.4S15.8 15.9 17 15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
         <span>CryptoFeeScope</span>
-        <span>· preview build</span>
       </div>
       <div class="links">
-        <a href="about.html">About</a> ·
-        <a href="roadmap.html">Roadmap</a> ·
-        <a href="data-sources.html">Data Sources</a> ·
-        <a href="donate.html">Donate</a> ·
-        <a href="disclaimer.html">Disclaimer</a>
+        <a href="/">Home</a> ·
+        <a href="/about.html">About</a> ·
+        <a href="/roadmap.html">Roadmap</a> ·
+        <a href="/data-sources.html">Data Sources</a> ·
+        <a href="/donate.html">Donate</a> ·
+        <a href="/disclaimer.html">Disclaimer</a>
       </div>
-      <div class="note">
-        Data is for reference only. Actual transaction costs and confirmation times may vary.
-      </div>
+      <div class="note">© 2025 badjoke-lab</div>
     </div>
   </footer>
 

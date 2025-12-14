@@ -3,88 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>About • CryptoFeeScope</title>
+  <title>CryptoFeeScope – About</title>
+  <meta name="description" content="Learn what CryptoFeeScope offers today and what is planned next for the multi-chain fee dashboard." />
+  <link rel="canonical" href="https://cryptofeescope.pages.dev/about.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="CryptoFeeScope" />
+  <meta property="og:title" content="CryptoFeeScope – About" />
+  <meta property="og:description" content="Learn what CryptoFeeScope offers today and what is planned next for the multi-chain fee dashboard." />
+  <meta property="og:url" content="https://cryptofeescope.pages.dev/about.html" />
+  <meta property="og:image" content="assets/og-cryptofeescope.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="CryptoFeeScope – About" />
+  <meta name="twitter:description" content="Learn what CryptoFeeScope offers today and what is planned next for the multi-chain fee dashboard." />
+  <meta name="twitter:image" content="assets/og-cryptofeescope.png" />
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="brand">
-        <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
-        <div>
-          <div>CryptoFeeScope</div>
-          <div style="font-size:11px;color:var(--muted);">What this dashboard aims to do</div>
+      <a class="brand-link" href="/">
+        <div class="brand">
+          <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
+          <div>
+            <div>CryptoFeeScope</div>
+            <div class="sub">What this dashboard aims to do</div>
+          </div>
         </div>
-      </div>
+      </a>
       <div class="spacer"></div>
-      <a href="./index.html" class="btn" style="text-decoration:none;">← Back</a>
-      <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+      <div class="toolbar">
+        <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="bar-line" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
+    <nav class="global-nav" id="global-nav">
+      <div class="global-nav-inner">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/roadmap.html">Roadmap</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/data-sources.html">Data Sources</a></li>
+          <li><a href="/donate.html">Donate</a></li>
+          <li><a href="/disclaimer.html">Disclaimer</a></li>
+        </ul>
+      </div>
+    </nav>
   </header>
 
   <main class="single">
-      <div class="card">
-        <div class="inner">
-          <h2 style="margin-top:0;">About CryptoFeeScope</h2>
-          <p>
-            CryptoFeeScope is a lightweight dashboard to compare
-            <strong>transaction fees</strong> and
-            <strong>approximate confirmation times</strong>
-            across major L1 and L2 networks on a single screen.
-          </p>
+    <div class="card">
+      <div class="inner">
+        <h2 style="margin-top:0;">About CryptoFeeScope</h2>
+        <p>
+          CryptoFeeScope is a lightweight dashboard to compare <strong>transaction fees</strong> and
+          <strong>approximate confirmation times</strong> across major L1 and L2 networks on a single screen.
+          The MVP uses the CoinGecko Demo snapshot hosted on Cloudflare Pages to keep the UI fast and predictable.
+        </p>
 
-          <h3>What it shows</h3>
-          <ul>
-            <li>Chain name (e.g. <em>Bitcoin (L1)</em>, <em>Arbitrum (L2 on ETH)</em>)</li>
-            <li>Estimated fee in USD (and converted to other fiat currencies like JPY)</li>
-            <li>Estimated time to first confirmation</li>
-            <li>Simple status label: <em>Fast</em> / <em>Avg</em> / <em>Slow</em></li>
-            <li>Timestamp of the last update (“Updated” column)</li>
-          </ul>
+        <h3>What it currently shows</h3>
+        <ul>
+          <li>Chain name (e.g. <em>Bitcoin (L1)</em>, <em>Arbitrum (L2 on ETH)</em>)</li>
+          <li>Estimated fee in USD and JPY with compact formatting</li>
+          <li>Estimated time to first confirmation</li>
+          <li>Simple status label: <em>Fast</em> / <em>Avg</em> / <em>Slow</em></li>
+          <li>Timestamp of the last update pulled from the snapshot JSON</li>
+        </ul>
 
-          <h3>How the numbers are intended to work</h3>
-          <ul>
-            <li>
-              Fee: base gas/fee estimate per chain, expressed in USD,  
-              then converted to the selected fiat currency on the client.
-            </li>
-            <li>
-              Speed: a rough estimate based on block time and typical confirmations,
-              shown as a <strong>reference value</strong>, not a guarantee.
-            </li>
-            <li>
-              L2 networks are labeled with their base L1, e.g.  
-              <code>Arbitrum (L2 on ETH)</code>, <code>Optimism (L2 on ETH)</code>.
-            </li>
-          </ul>
+        <h3>How the numbers are intended to work</h3>
+        <ul>
+          <li>
+            Fee: base gas/fee estimate per chain expressed in USD, then converted to the selected fiat currency on the client.
+          </li>
+          <li>
+            Speed: a rough estimate based on block time and typical confirmations, shown as a <strong>reference value</strong>, not a guarantee.
+          </li>
+          <li>
+            L2 networks are labeled with their base L1, e.g. <code>Arbitrum (L2 on ETH)</code>, <code>Optimism (L2 on ETH)</code>.
+          </li>
+        </ul>
 
-          <p class="hint">
-            In the current preview build, all values come from mock data for UI testing.  
-            A later phase will switch to live data from public gas/fee APIs.
-          </p>
-        </div>
+        <h3>Planned additions</h3>
+        <ul>
+          <li>Historical trend lines and more fiat currencies (EUR is first in line)</li>
+          <li>Live Worker-backed API that no longer relies on demo endpoints</li>
+          <li>Per-row data provenance with source labels and fetch timestamps</li>
+        </ul>
+
+        <p class="hint">
+          The current build is powered by demo data for stability while UI polish completes. Production-grade data sources and
+          additional UX improvements are planned in the next phases.
+        </p>
       </div>
+    </div>
   </main>
 
   <footer>
     <div class="inner">
       <div class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"
-          viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
         <strong>CryptoFeeScope</strong>
       </div>
-      <div style="margin-top:6px">
-        <a href="./about.html" style="color:var(--muted)">About</a> ·
-        <a href="./roadmap.html" style="color:var(--muted)">Roadmap</a> ·
-        <a href="./data-sources.html" style="color:var(--muted)">Data Sources</a> ·
-        <a href="./donate.html" style="color:var(--muted)">Donate</a> ·
-        <a href="./disclaimer.html" style="color:var(--muted)">Disclaimer</a>
+      <div class="links">
+        <a href="/">Home</a> ·
+        <a href="/about.html">About</a> ·
+        <a href="/roadmap.html">Roadmap</a> ·
+        <a href="/data-sources.html">Data Sources</a> ·
+        <a href="/donate.html">Donate</a> ·
+        <a href="/disclaimer.html">Disclaimer</a>
       </div>
+      <div class="note">© 2025 badjoke-lab</div>
     </div>
   </footer>
 
   <script>
-    (function initTheme(){
+    (function initPage(){
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       const saved = localStorage.getItem('theme');
       const theme = saved || (prefersDark ? 'dark' : 'light');
@@ -98,10 +132,31 @@
           localStorage.setItem('theme', now);
         });
       }
+
+      const nav = document.getElementById('global-nav');
+      const toggle = document.getElementById('nav-toggle');
+      const sync = () => {
+        if (!nav || !toggle) return;
+        if (window.innerWidth > 768) {
+          nav.classList.add('open');
+          toggle.setAttribute('aria-expanded', 'true');
+        } else {
+          nav.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      };
+      if (nav && toggle){
+        toggle.addEventListener('click', () => {
+          const isOpen = nav.classList.toggle('open');
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        window.addEventListener('resize', sync);
+        sync();
+      }
     })();
   </script>
   <!-- Cloudflare Web Analytics -->
-  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475ee54e4"}'></script>
   <!-- End Cloudflare Web Analytics -->
 </body>
 </html>

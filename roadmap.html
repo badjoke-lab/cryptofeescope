@@ -4,98 +4,120 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CryptoFeeScope – Roadmap</title>
+  <meta name="description" content="See the CryptoFeeScope delivery status: demo snapshot today, live API and UX polish next." />
+  <link rel="canonical" href="https://cryptofeescope.pages.dev/roadmap.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="CryptoFeeScope" />
+  <meta property="og:title" content="CryptoFeeScope – Roadmap" />
+  <meta property="og:description" content="See the CryptoFeeScope delivery status: demo snapshot today, live API and UX polish next." />
+  <meta property="og:url" content="https://cryptofeescope.pages.dev/roadmap.html" />
+  <meta property="og:image" content="assets/og-cryptofeescope.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="CryptoFeeScope – Roadmap" />
+  <meta name="twitter:description" content="See the CryptoFeeScope delivery status: demo snapshot today, live API and UX polish next." />
+  <meta name="twitter:image" content="assets/og-cryptofeescope.png" />
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="brand">
-        <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
-        <div>
-          <div>CryptoFeeScope</div>
-          <div style="font-size:11px;color:var(--muted);">Public roadmap</div>
+      <a class="brand-link" href="/">
+        <div class="brand">
+          <img src="./assets/logo.svg" alt="CryptoFeeScope logo">
+          <div>
+            <div>CryptoFeeScope</div>
+            <div class="sub">Public roadmap</div>
+          </div>
         </div>
-      </div>
+      </a>
       <div class="spacer"></div>
-      <a href="./index.html" class="btn" style="text-decoration:none;">← Back</a>
-      <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+      <div class="toolbar">
+        <button id="themeBtn" class="btn" title="Toggle light/dark">🌞</button>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="bar-line" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
+    <nav class="global-nav" id="global-nav">
+      <div class="global-nav-inner">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/roadmap.html">Roadmap</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/data-sources.html">Data Sources</a></li>
+          <li><a href="/donate.html">Donate</a></li>
+          <li><a href="/disclaimer.html">Disclaimer</a></li>
+        </ul>
+      </div>
+    </nav>
   </header>
 
   <main class="single">
-      <div class="card">
-        <div class="inner">
-          <h2 style="margin-top:0;">CryptoFeeScope – Public Roadmap</h2>
-          <p>
-            This page shows where the project is today and what will come next.
-            Dates are indicative only and may change.
-          </p>
+    <div class="card">
+      <div class="inner">
+        <h2 style="margin-top:0;">CryptoFeeScope – Public Roadmap</h2>
+        <p>
+          This page shows where the project is today and what will come next. Dates are indicative only and may change.
+        </p>
 
-          <h3>Phase 1 – Static demo snapshot (completed)</h3>
-          <ul>
-            <li>Single-page dashboard hosted on Cloudflare Pages</li>
-            <li>Fee &amp; latency snapshot loaded from /data/fee_snapshot_demo.json</li>
-            <li>USD / JPY toggle</li>
-            <li>Basic formatting for very small and very large fees</li>
-          </ul>
-          <p><strong>Status:</strong> Shipped as the current preview build</p>
+        <h3>Phase 1 – Static demo snapshot (completed)</h3>
+        <ul>
+          <li>Single-page dashboard hosted on Cloudflare Pages</li>
+          <li>Fee &amp; latency snapshot loaded from /data/fee_snapshot_demo.json</li>
+          <li>USD / JPY toggle</li>
+          <li>Basic formatting for very small and very large fees</li>
+        </ul>
+        <p><strong>Status:</strong> Shipped as the baseline MVP</p>
 
-          <h3>Phase 1.5 – Auto-updated demo + UX polish (completed)</h3>
-          <ul>
-            <li>GitHub Actions cron job updates the snapshot every 10 minutes</li>
-            <li>Improved fee number formatting (&lt; 0.000001 handling, k / m suffix)</li>
-            <li>“Status legend” block and mobile layout tuning</li>
-            <li>24h change column (demo-level, CoinGecko demo API)</li>
-          </ul>
-          <p><strong>Status:</strong> Shipped</p>
+        <h3>Phase 1.5 – Auto-updated demo + UX polish (completed)</h3>
+        <ul>
+          <li>GitHub Actions cron job updates the snapshot every 10 minutes (CoinGecko Demo API)</li>
+          <li>Improved fee number formatting (&lt; 0.000001 handling, k / m suffix)</li>
+          <li>“Status legend” block and mobile layout tuning</li>
+          <li>24h change column (demo-level, CoinGecko demo API)</li>
+        </ul>
+        <p><strong>Status:</strong> Shipped and powering the current public preview</p>
 
-          <h3>Phase 2 – Worker-powered live API (planned)</h3>
-          <ul>
-            <li>Move the fee engine to a Cloudflare Worker endpoint</li>
-            <li>Fetch fees from better data sources (beyond demo API limits)</li>
-            <li>Keep the public dashboard as a thin client calling the Worker</li>
-            <li>Make the snapshot URL configurable for other deployments</li>
-          </ul>
-          <p><strong>Status:</strong> Planned</p>
+        <h3>Phase 2 – Worker-powered live API (planned)</h3>
+        <ul>
+          <li>Move the fee engine to a Cloudflare Worker endpoint</li>
+          <li>Fetch fees from better data sources (beyond demo API limits)</li>
+          <li>Keep the public dashboard as a thin client calling the Worker</li>
+          <li>Make the snapshot URL configurable for other deployments</li>
+        </ul>
+        <p><strong>Status:</strong> Planned</p>
 
-          <h3>Phase 3 – History &amp; charts (planned)</h3>
-          <ul>
-            <li>Store hourly or 10-minute snapshots</li>
-            <li>Show basic charts for recent fee trends per chain</li>
-            <li>Simple stats page (min / max / average fee)</li>
-          </ul>
-          <p><strong>Status:</strong> Planned</p>
-
-          <h3>Phase 4 – Pro &amp; automation ideas (exploring)</h3>
-          <ul>
-            <li>JSON / CSV API for bots and other tools</li>
-            <li>Optional notifications or webhooks when fees drop below a threshold</li>
-            <li>Lightweight embeddable widgets for other sites</li>
-          </ul>
-          <p><strong>Status:</strong> Exploring</p>
-        </div>
+        <h3>Phase 3 – Insights &amp; user QoL (planned)</h3>
+        <ul>
+          <li>Historical trend chart with simple presets (1h / 24h / 7d)</li>
+          <li>Additional fiat options (EUR first), plus localized number formatting</li>
+          <li>Contextual hints for bridges, token tickers, and common wallets</li>
+        </ul>
+        <p><strong>Status:</strong> Planned</p>
       </div>
+    </div>
   </main>
 
   <footer>
     <div class="inner">
       <div class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"
-          viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v18m9-9H3"/></svg>
         <strong>CryptoFeeScope</strong>
       </div>
-      <div style="margin-top:6px">
-        <a href="./about.html" style="color:var(--muted)">About</a> ·
-        <a href="./roadmap.html" style="color:var(--muted)">Roadmap</a> ·
-        <a href="./data-sources.html" style="color:var(--muted)">Data Sources</a> ·
-        <a href="./donate.html" style="color:var(--muted)">Donate</a> ·
-        <a href="./disclaimer.html" style="color:var(--muted)">Disclaimer</a>
+      <div class="links">
+        <a href="/">Home</a> ·
+        <a href="/about.html">About</a> ·
+        <a href="/roadmap.html">Roadmap</a> ·
+        <a href="/data-sources.html">Data Sources</a> ·
+        <a href="/donate.html">Donate</a> ·
+        <a href="/disclaimer.html">Disclaimer</a>
       </div>
+      <div class="note">© 2025 badjoke-lab</div>
     </div>
   </footer>
 
   <script>
-    (function initTheme(){
+    (function initPage(){
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       const saved = localStorage.getItem('theme');
       const theme = saved || (prefersDark ? 'dark' : 'light');
@@ -109,10 +131,31 @@
           localStorage.setItem('theme', now);
         });
       }
+
+      const nav = document.getElementById('global-nav');
+      const toggle = document.getElementById('nav-toggle');
+      const sync = () => {
+        if (!nav || !toggle) return;
+        if (window.innerWidth > 768) {
+          nav.classList.add('open');
+          toggle.setAttribute('aria-expanded', 'true');
+        } else {
+          nav.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      };
+      if (nav && toggle){
+        toggle.addEventListener('click', () => {
+          const isOpen = nav.classList.toggle('open');
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        window.addEventListener('resize', sync);
+        sync();
+      }
     })();
   </script>
   <!-- Cloudflare Web Analytics -->
-  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475ee54e4"}'></script>
   <!-- End Cloudflare Web Analytics -->
 </body>
 </html>
