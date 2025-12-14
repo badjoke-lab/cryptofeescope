@@ -53,23 +53,66 @@
   </header>
 
   <main class="single">
-    <div class="card">
-      <div class="inner">
-        <h2 style="margin-top:0;">Donate</h2>
-        <p>
-          CryptoFeeScope is an independent project. Donations help cover hosting for the demo snapshot, higher-rate API plans,
-          and extra time to ship planned features like live Workers and historical views. Thank you!
-        </p>
+    <div class="donate-grid">
+      <section class="card donate-card">
+        <div class="inner">
+          <h2 style="margin-top:0;">Donate</h2>
+          <p>
+            CryptoFeeScope is an independent project. Contributions help cover API plans, hosting for live snapshots, and time to
+            ship planned features like historical views and alerts.
+          </p>
+          <p class="donate-note">Thanks for your support—totally optional, always appreciated.</p>
 
-        <h3>Contribution options</h3>
-        <ul>
-          <li>ETH / ERC-20: <code>0x0DBb65709365B2698F3335Bce8E6b23Bacb1A2FD</code></li>
-          <li>BTC: <code>bc1q5f8h9jnm8tkyhvj3f5stfxs5r0m0g6r5tvl9z0</code></li>
-          <li>Polygon / USDC: <code>0x0DBb65709365B2698F3335Bce8E6b23Bacb1A2FD</code></li>
-        </ul>
+          <div class="donate-columns">
+            <div>
+              <h3>Support via Stripe</h3>
+              <p>You can send a one-time tip via Stripe. No account required.</p>
+              <div class="donate-actions">
+                <a class="donate-btn donate-btn-stripe" href="https://donate.stripe.com/" target="_blank" rel="noopener">
+                  Donate with Stripe
+                </a>
+              </div>
+            </div>
 
-        <p class="hint">If you want your name or org listed as a supporter on the roadmap page, reach out after donating.</p>
-      </div>
+            <div>
+              <h3>Support via Ko-fi</h3>
+              <p>If you prefer Ko-fi, you can send a small coffee here.</p>
+              <div class="donate-actions">
+                <a class="donate-btn donate-btn-kofi" href="https://ko-fi.com/badjokelab" target="_blank" rel="noopener">
+                  Visit Ko-fi page
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card donate-card">
+        <div class="inner">
+          <h3>Crypto wallets</h3>
+          <p>Prefer crypto? These addresses support the project directly.</p>
+          <table class="wallet-table">
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>BTC</td><td><code class="wallet-address">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</code></td></tr>
+              <tr><td>ETH (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
+              <tr><td>USDT (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
+              <tr><td>USDC (ERC-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
+              <tr><td>SOL</td><td><code class="wallet-address">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</code></td></tr>
+              <tr><td>BNB (BEP-20)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
+              <tr><td>DOGE</td><td><code class="wallet-address">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</code></td></tr>
+              <tr><td>AVAX (C-Chain)</td><td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td></tr>
+              <tr><td>XRP</td><td><code class="wallet-address">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</code></td></tr>
+            </tbody>
+          </table>
+          <p class="hint">If you want your name or org listed as a supporter on the roadmap page, reach out after donating.</p>
+        </div>
+      </section>
     </div>
   </main>
 

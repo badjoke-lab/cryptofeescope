@@ -211,33 +211,33 @@ function renderTable() {
       tr.classList.add("fee-row", `status-${statusStr}`);
 
       const tdChain = document.createElement("td");
-      tdChain.classList.add("chain-cell");
+      tdChain.classList.add("col-chain", "chain-cell");
       const chainLabelEl = document.createElement("div");
       chainLabelEl.classList.add("chain-label");
       chainLabelEl.textContent = chain.label || key;
       tdChain.append(chainLabelEl);
 
       const tdTicker = document.createElement("td");
-      tdTicker.classList.add("ticker-cell");
+      tdTicker.classList.add("col-ticker", "ticker-cell");
       tdTicker.textContent = ticker;
 
       const tdFee = document.createElement("td");
-      tdFee.classList.add("fee-cell");
+      tdFee.classList.add("col-fee", "fee-cell");
       tdFee.textContent = displayFee;
       if (feeTitle) {
         tdFee.title = feeTitle;
       }
 
       const tdChange = document.createElement("td");
-      tdChange.classList.add("change-cell", changeClass);
+      tdChange.classList.add("col-change", "change-cell", changeClass);
       tdChange.textContent = changeText;
 
       const tdSpeed = document.createElement("td");
-      tdSpeed.classList.add("speed-cell");
+      tdSpeed.classList.add("col-speed", "speed-cell");
       tdSpeed.textContent = speedStr;
 
       const tdStatus = document.createElement("td");
-      tdStatus.classList.add("status-cell", `status-${statusStr}`);
+      tdStatus.classList.add("col-status", "status-cell", `status-${statusStr}`);
       tdStatus.textContent = statusStr;
 
       tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus);
