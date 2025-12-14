@@ -192,8 +192,14 @@ function renderTable() {
     tr.classList.add("fee-row", `status-${statusStr}`);
 
     const tdChain = document.createElement("td");
-    tdChain.classList.add("chain-name-cell");
-    tdChain.textContent = chain.label || key;
+    tdChain.classList.add("chain-cell");
+    const chainLabelEl = document.createElement("div");
+    chainLabelEl.classList.add("chain-label");
+    chainLabelEl.textContent = chain.label || key;
+    const chainTickerEl = document.createElement("div");
+    chainTickerEl.classList.add("chain-ticker");
+    chainTickerEl.textContent = ticker;
+    tdChain.append(chainLabelEl, chainTickerEl);
 
     const tdTicker = document.createElement("td");
     tdTicker.classList.add("ticker-cell");
@@ -213,10 +219,7 @@ function renderTable() {
     tdStatus.classList.add("status-cell", `status-${statusStr}`);
     tdStatus.textContent = statusStr;
 
-    const tdUpdated = document.createElement("td");
-    tdUpdated.textContent = formatUpdated(chain.updated);
-
-    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus, tdUpdated);
+    tr.append(tdChain, tdTicker, tdFee, tdSpeed, tdStatus);
     tbody.appendChild(tr);
   });
 }

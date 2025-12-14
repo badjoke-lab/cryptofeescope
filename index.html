@@ -81,18 +81,18 @@
         <div class="inner">
           <h2>Snapshot controls</h2>
           <p>
-            CryptoFeeScope (demo) pulls an estimated fee snapshot from CoinGecko at
+            This is a demo snapshot served on Cloudflare Pages using the CoinGecko demo API at
             <code>/data/fee_snapshot_demo.json</code>.
           </p>
           <p>
-            Reload the snapshot and toggle fiat currency below. Values are approximate; not investment advice. ※ デモ版の推定手数料です。
+            Fees are indicative only (not investment advice) and refreshed on demand with the buttons below. ※ デモ版の参考手数料です。
           </p>
+          <p class="hint">We plan to ship historical trends and EUR toggle in later revisions.</p>
           <div class="currency-toggle">
             <button id="currency-usd" class="btn small" type="button">USD</button>
             <button id="currency-jpy" class="btn small" type="button">JPY</button>
           </div>
-          <p class="hint">EUR、badge、ダークモードの永続化などは次フェーズで追加予定です。</p>
-          <p class="hint">Token search &amp; bridge hints will appear here in later versions.</p>
+          <p class="hint subtle">Coming soon: Token search &amp; bridge hints will appear here in later versions.</p>
         </div>
       </article>
 
@@ -106,21 +106,22 @@
               <li><span class="status-dot slow"></span>Slow（遅い） ≈ 10+ minutes</li>
             </ul>
           </div>
-          <table class="fee-table">
-            <thead>
-              <tr>
-                <th>Chain</th>
-                <th>Ticker</th>
-                <th id="fee-header">Fee (USD)</th>
-                <th>Speed (est.)</th>
-                <th>Status</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody id="fee-table-body">
-              <!-- JS で描画 -->
-            </tbody>
-          </table>
+          <div class="fee-table-wrapper">
+            <table class="fee-table">
+              <thead>
+                <tr>
+                  <th>Chain / Ticker</th>
+                  <th>Ticker</th>
+                  <th id="fee-header">Fee (USD)</th>
+                  <th>Speed</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="fee-table-body">
+                <!-- JS で描画 -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </article>
     </section>
