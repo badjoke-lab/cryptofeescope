@@ -327,6 +327,23 @@ tbody tr:hover{
   opacity:.8;
 }
 
+@media(min-width:900px){
+  .fee-table{table-layout:fixed;}
+  .fee-table .col-chain{
+    width:32%;
+    white-space:nowrap;
+    padding-right:12px;
+  }
+  .fee-table .col-ticker{
+    width:10%;
+    white-space:nowrap;
+  }
+  .fee-table .col-fee{width:18%;}
+  .fee-table .col-change{width:14%;}
+  .fee-table .col-speed{width:13%;}
+  .fee-table .col-status{width:13%;}
+}
+
 /* Details 列（▾ボタン） */
 .col-details{
   width:40px;
@@ -441,6 +458,93 @@ footer .note{
 
 /* Utility */
 .hidden{display:none!important}
+
+/* Donate page */
+.donate-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+}
+
+.donate-card h3{
+  margin-top:0;
+  margin-bottom:8px;
+}
+
+.donate-card p{
+  margin-top:0;
+}
+
+.donate-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:10px;
+}
+
+.donate-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:10px 14px;
+  border-radius:10px;
+  font-weight:700;
+  text-decoration:none;
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+
+.donate-btn:hover{transform:translateY(-1px);}
+.donate-btn:active{transform:translateY(0);}
+
+.donate-btn-stripe{
+  background:#635bff;
+  color:#fff;
+  box-shadow:0 4px 14px rgba(99,91,255,.25);
+}
+
+.donate-btn-kofi{
+  background:#29abe0;
+  color:#fff;
+  box-shadow:0 4px 14px rgba(41,171,224,.25);
+}
+
+.donate-note{
+  color:var(--muted);
+  margin-top:10px;
+  font-size:13px;
+}
+
+.wallet-table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:6px;
+  font-size:13px;
+}
+
+.wallet-table th,
+.wallet-table td{
+  border-bottom:1px solid var(--line);
+  padding:6px 8px;
+  text-align:left;
+}
+
+.wallet-table th{color:var(--muted);font-size:12px;}
+
+.wallet-address{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  word-break:break-all;
+  font-size:12px;
+}
+
+.donate-columns{
+  display:grid;
+  gap:16px;
+}
+
+@media(min-width:900px){
+  .donate-grid{grid-template-columns:2fr 1.1fr;align-items:start;}
+  .donate-columns{grid-template-columns:1fr 1fr;}
+}
 
 /* Responsive tweaks */
 @media(min-width:769px){
