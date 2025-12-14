@@ -469,12 +469,54 @@ footer .note{
   .pill{white-space:normal;font-size:11px;}
   .updated-label{display:block;margin-top:4px;font-size:11px;}
   .fee-table{table-layout:auto;}
-  thead th{font-size:11px;padding:0.35rem 0.4rem;}
-  .fee-table td{padding:0.32rem 0.4rem;font-size:12px;}
-  .fee-table .chain-cell{gap:1px;}
-  .fee-table .chain-label{font-size:13px;}
-  .fee-table .chain-ticker{font-size:11px;}
-  .fee-table .ticker-cell{font-size:12px;}
+  thead{display:none;}
+  tbody tr{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      "chain chain ticker ticker"
+      "fee change speed status";
+    border-bottom:1px solid var(--line);
+    padding:0.15rem 0.2rem 0.25rem;
+    gap:4px 8px;
+  }
+  tbody tr:last-child{border-bottom:0;}
+  tbody td{
+    padding:0;
+    border-bottom:0;
+    font-size:12px;
+    line-height:1.4;
+  }
+  .fee-table .chain-cell{
+    grid-area:chain;
+    display:flex;
+    flex-direction:row;
+    align-items:baseline;
+    gap:8px;
+    font-size:13px;
+    font-weight:700;
+    word-break:break-word;
+  }
+  .fee-table .chain-label{font-size:inherit;}
+  .fee-table .ticker-cell{
+    grid-area:ticker;
+    justify-self:end;
+    font-weight:700;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .fee-table .fee-cell{grid-area:fee;font-size:12px;font-weight:700;}
+  .fee-table .change-cell{
+    grid-area:change;
+    text-align:left;
+    font-size:12px;
+  }
+  .fee-table .speed-cell{
+    grid-area:speed;
+    white-space:nowrap;
+    font-size:12px;
+  }
+  .fee-table .status-cell{grid-area:status;font-size:12px;}
   .fee-table-wrapper{overflow-x:hidden;}
   .card .inner{padding:12px;}
   .btn .label{display:none;}
@@ -482,10 +524,6 @@ footer .note{
 
   .filters{
     flex-direction:column;
-  }
-
-  .change-cell{
-    font-size:11px;
   }
 }
 
