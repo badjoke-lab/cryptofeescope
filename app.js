@@ -162,16 +162,22 @@ function formatUpdated(iso) {
 // ----- Rendering -----
 function renderTable() {
   const tbody = document.getElementById("fee-table-body");
+  const tbodyMobile = document.getElementById("fee-table-body-mobile");
   const header = document.getElementById("fee-header");
   if (header) {
     header.textContent = state.currency === "usd" ? "Fee (USD)" : "Fee (JPY)";
   }
-  if (!tbody || !state.snapshot) return;
+  if (!state.snapshot) return;
 
   const currency = state.currency; // "usd" or "jpy"
   const chains = state.snapshot.chains || {};
 
-  tbody.textContent = "";
+  if (tbody) {
+    tbody.textContent = "";
+  }
+  if (tbodyMobile) {
+    tbodyMobile.textContent = "";
+  }
 
   Object.entries(chains).forEach(([key, chain]) => {
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
@@ -200,41 +206,88 @@ function renderTable() {
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
     const ticker = (key || "?").toUpperCase();
 
-    const tr = document.createElement("tr");
-    tr.classList.add("fee-row", `status-${statusStr}`);
+    if (tbody) {
+      const tr = document.createElement("tr");
+      tr.classList.add("fee-row", `status-${statusStr}`);
 
-    const tdChain = document.createElement("td");
-    tdChain.classList.add("chain-cell");
-    const chainLabelEl = document.createElement("div");
-    chainLabelEl.classList.add("chain-label");
-    chainLabelEl.textContent = chain.label || key;
-    tdChain.append(chainLabelEl);
+      const tdChain = document.createElement("td");
+      tdChain.classList.add("chain-cell");
+      const chainLabelEl = document.createElement("div");
+      chainLabelEl.classList.add("chain-label");
+      chainLabelEl.textContent = chain.label || key;
+      tdChain.append(chainLabelEl);
 
-    const tdTicker = document.createElement("td");
-    tdTicker.classList.add("ticker-cell");
-    tdTicker.textContent = ticker;
+      const tdTicker = document.createElement("td");
+      tdTicker.classList.add("ticker-cell");
+      tdTicker.textContent = ticker;
 
-    const tdFee = document.createElement("td");
-    tdFee.classList.add("fee-cell");
-    tdFee.textContent = displayFee;
-    if (feeTitle) {
-      tdFee.title = feeTitle;
+      const tdFee = document.createElement("td");
+      tdFee.classList.add("fee-cell");
+      tdFee.textContent = displayFee;
+      if (feeTitle) {
+        tdFee.title = feeTitle;
+      }
+
+      const tdChange = document.createElement("td");
+      tdChange.classList.add("change-cell", changeClass);
+      tdChange.textContent = changeText;
+
+      const tdSpeed = document.createElement("td");
+      tdSpeed.classList.add("speed-cell");
+      tdSpeed.textContent = speedStr;
+
+      const tdStatus = document.createElement("td");
+      tdStatus.classList.add("status-cell", `status-${statusStr}`);
+      tdStatus.textContent = statusStr;
+
+      tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus);
+      tbody.appendChild(tr);
     }
 
-    const tdChange = document.createElement("td");
-    tdChange.classList.add("change-cell", changeClass);
-    tdChange.textContent = changeText;
+    if (tbodyMobile) {
+      const trMobile = document.createElement("tr");
+      trMobile.classList.add("fee-row-mobile", `status-${statusStr}`);
 
-    const tdSpeed = document.createElement("td");
-    tdSpeed.classList.add("speed-cell");
-    tdSpeed.textContent = speedStr;
+      const tdMobileLeft = document.createElement("td");
+      tdMobileLeft.classList.add("cell-mobile-left");
+      const chainNameMobile = document.createElement("div");
+      chainNameMobile.classList.add("chain-name-mobile");
+      chainNameMobile.textContent = chain.label || key;
+      const chainTickerMobile = document.createElement("div");
+      chainTickerMobile.classList.add("chain-ticker-mobile");
+      chainTickerMobile.textContent = ticker;
+      tdMobileLeft.append(chainNameMobile, chainTickerMobile);
 
-    const tdStatus = document.createElement("td");
-    tdStatus.classList.add("status-cell", `status-${statusStr}`);
-    tdStatus.textContent = statusStr;
+      const tdMobileRight = document.createElement("td");
+      tdMobileRight.classList.add("cell-mobile-right");
 
-    tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus);
-    tbody.appendChild(tr);
+      const metricsTop = document.createElement("div");
+      metricsTop.classList.add("metrics-top");
+      const feeValueMobile = document.createElement("span");
+      feeValueMobile.classList.add("fee-value-mobile");
+      feeValueMobile.textContent = displayFee;
+      if (feeTitle) {
+        feeValueMobile.title = feeTitle;
+      }
+      const changeValueMobile = document.createElement("span");
+      changeValueMobile.classList.add("change-value-mobile", changeClass);
+      changeValueMobile.textContent = changeText;
+      metricsTop.append("Fee ", feeValueMobile, " · 24h ", changeValueMobile);
+
+      const metricsBottom = document.createElement("div");
+      metricsBottom.classList.add("metrics-bottom");
+      const speedMobile = document.createElement("span");
+      speedMobile.classList.add("speed-mobile");
+      speedMobile.textContent = speedStr;
+      const statusMobile = document.createElement("span");
+      statusMobile.classList.add("status-mobile", "status-cell", `status-${statusStr}`);
+      statusMobile.textContent = statusStr;
+      metricsBottom.append(speedMobile, " · ", statusMobile);
+
+      tdMobileRight.append(metricsTop, metricsBottom);
+      trMobile.append(tdMobileLeft, tdMobileRight);
+      tbodyMobile.appendChild(trMobile);
+    }
   });
 }
 
