@@ -333,15 +333,49 @@ tbody tr:hover{
 }
 
 @media(min-width:768px){
-  .fee-table{table-layout:fixed;}
+  .fee-table{table-layout:fixed;width:100%;}
   .fee-table .chain-cell{flex-direction:row;align-items:center;gap:10px;white-space:normal;}
   .fee-table .chain-label{font-size:14px;}
-  .fee-table .col-chain{width:28%;padding-right:14px;}
-  .fee-table .col-ticker{width:11%;padding-right:6px;}
-  .fee-table .col-fee{width:17%;}
-  .fee-table .col-change{width:15%;}
-  .fee-table .col-speed{width:14%;}
-  .fee-table .col-status{width:15%;}
+
+  .fee-table th:nth-child(1),
+  .fee-table td:nth-child(1){
+    width:32%;
+    padding-right:14px;
+  }
+
+  .fee-table th:nth-child(2),
+  .fee-table td:nth-child(2){
+    width:10%;
+    padding-right:12px;
+    white-space:nowrap;
+  }
+
+  .fee-table th:nth-child(3),
+  .fee-table td:nth-child(3){
+    width:16%;
+    padding-left:8px;
+    white-space:nowrap;
+  }
+
+  .fee-table th:nth-child(4),
+  .fee-table td:nth-child(4){
+    width:14%;
+    white-space:nowrap;
+  }
+
+  .fee-table th:nth-child(5),
+  .fee-table td:nth-child(5){
+    width:14%;
+    white-space:nowrap;
+  }
+
+  .fee-table th:nth-child(6),
+  .fee-table td:nth-child(6){
+    width:14%;
+    white-space:nowrap;
+  }
+
+  .fee-table td{padding-top:8px;padding-bottom:8px;}
 }
 
 /* Details 列（▾ボタン） */
