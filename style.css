@@ -346,19 +346,68 @@ tbody tr:hover{
   .fee-table td{padding-top:8px;padding-bottom:8px;}
 }
 
-@media(min-width:768px) and (max-width:959px){
+@media(min-width:481px) and (max-width:799px){
+  .fee-table th,
+  .fee-table td{font-size:13px;padding:0.4rem 0.45rem;}
+
+  .fee-table .chain-cell{white-space:normal;}
+
+  .fee-table th:nth-child(1),
+  .fee-table td:nth-child(1){
+    width:26%;
+    padding-right:10px;
+  }
+
+  .fee-table th:nth-child(2),
+  .fee-table td:nth-child(2){
+    width:12%;
+    padding-right:8px;
+  }
+
+  .fee-table th:nth-child(3),
+  .fee-table td:nth-child(3){
+    width:20%;
+    padding-inline:8px;
+    text-align:right;
+    font-size:0.9rem;
+  }
+
+  .fee-table th:nth-child(4),
+  .fee-table td:nth-child(4){
+    width:14%;
+    padding-inline:6px;
+    text-align:right;
+    font-size:0.9rem;
+  }
+
+  .fee-table th:nth-child(5),
+  .fee-table td:nth-child(5){
+    width:14%;
+    padding-inline:6px;
+    font-size:0.9rem;
+  }
+
+  .fee-table th:nth-child(6),
+  .fee-table td:nth-child(6){
+    width:14%;
+    padding-inline:6px;
+    font-size:0.9rem;
+  }
+}
+
+@media(min-width:800px) and (max-width:959px){
   .fee-table th,
   .fee-table td{font-size:13px;}
 
   .fee-table th:nth-child(1),
   .fee-table td:nth-child(1){
-    width:26%;
+    width:27%;
     padding-right:12px;
   }
 
   .fee-table th:nth-child(2),
   .fee-table td:nth-child(2){
-    width:11%;
+    width:12%;
     padding-right:10px;
   }
 
@@ -371,13 +420,13 @@ tbody tr:hover{
 
   .fee-table th:nth-child(4),
   .fee-table td:nth-child(4){
-    width:15%;
+    width:14%;
     text-align:right;
   }
 
   .fee-table th:nth-child(5),
   .fee-table td:nth-child(5){
-    width:15%;
+    width:14%;
   }
 
   .fee-table th:nth-child(6),
@@ -389,19 +438,19 @@ tbody tr:hover{
 @media(min-width:960px){
   .fee-table th:nth-child(1),
   .fee-table td:nth-child(1){
-    width:26%;
+    width:28%;
     padding-right:14px;
   }
 
   .fee-table th:nth-child(2),
   .fee-table td:nth-child(2){
-    width:10%;
+    width:11%;
     padding-right:12px;
   }
 
   .fee-table th:nth-child(3),
   .fee-table td:nth-child(3){
-    width:18%;
+    width:17%;
     padding-left:10px;
     text-align:right;
   }
@@ -414,12 +463,12 @@ tbody tr:hover{
 
   .fee-table th:nth-child(5),
   .fee-table td:nth-child(5){
-    width:16%;
+    width:15%;
   }
 
   .fee-table th:nth-child(6),
   .fee-table td:nth-child(6){
-    width:16%;
+    width:15%;
   }
 }
 
