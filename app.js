@@ -86,6 +86,18 @@ const state = {
   currency: "usd", // "usd" | "jpy"
 };
 
+const METHOD_ANCHORS = {
+  btc: "btc",
+  eth: "eth",
+  bsc: "bsc",
+  arbitrum: "arbitrum",
+  optimism: "optimism",
+  sol: "solana",
+  tron: "tron",
+  avax: "avax",
+  xrp: "xrp",
+};
+
 function toPlainNumberString(value) {
   if (!Number.isFinite(value)) return String(value);
   const sign = value < 0 ? "-" : "";
@@ -165,7 +177,7 @@ function renderTable() {
   const tbodyMobile = document.getElementById("fee-table-body-mobile");
   const header = document.getElementById("fee-header");
   if (header) {
-    header.textContent = state.currency === "usd" ? "Fee (USD)" : "Fee (JPY)";
+    header.textContent = state.currency === "usd" ? "Fee (est. USD)" : "Fee (est. JPY)";
   }
   if (!state.snapshot) return;
 
@@ -185,11 +197,13 @@ function renderTable() {
     const rawFee = chain[currencyKey];
 
     const displayFee = formatFiat(rawFee);
+    const displayFeeApprox = displayFee === "—" ? displayFee : `≈ ${displayFee}`;
     const feeTitle =
       typeof rawFee === "number" && Number.isFinite(rawFee)
         ? `${toPlainNumberString(rawFee)} ${currencyCode}`
         : "";
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
+    const speedApprox = speedStr === "—" ? speedStr : `≈ ${speedStr}`;
     const statusStr = chain.status || "unknown";
     const changePct = chain.priceChange24hPct;
     let changeText = "—";
@@ -215,6 +229,15 @@ function renderTable() {
       const chainLabelEl = document.createElement("div");
       chainLabelEl.classList.add("chain-label");
       chainLabelEl.textContent = chain.label || key;
+      const methodAnchor = METHOD_ANCHORS[key];
+      if (methodAnchor) {
+        const infoLink = document.createElement("a");
+        infoLink.classList.add("method-link");
+        infoLink.href = `/data-sources.html#${methodAnchor}`;
+        infoLink.setAttribute("aria-label", "See methodology for this chain");
+        infoLink.textContent = "ⓘ";
+        chainLabelEl.appendChild(infoLink);
+      }
       tdChain.append(chainLabelEl);
 
       const tdTicker = document.createElement("td");
@@ -223,7 +246,7 @@ function renderTable() {
 
       const tdFee = document.createElement("td");
       tdFee.classList.add("col-fee", "fee-cell");
-      tdFee.textContent = displayFee;
+      tdFee.textContent = displayFeeApprox;
       if (feeTitle) {
         tdFee.title = feeTitle;
       }
@@ -234,7 +257,7 @@ function renderTable() {
 
       const tdSpeed = document.createElement("td");
       tdSpeed.classList.add("col-speed", "speed-cell");
-      tdSpeed.textContent = speedStr;
+      tdSpeed.textContent = speedApprox;
 
       const tdStatus = document.createElement("td");
       tdStatus.classList.add("col-status", "status-cell", `status-${statusStr}`);
@@ -253,6 +276,15 @@ function renderTable() {
       const chainNameMobile = document.createElement("div");
       chainNameMobile.classList.add("chain-name-mobile");
       chainNameMobile.textContent = chain.label || key;
+      const methodAnchorMobile = METHOD_ANCHORS[key];
+      if (methodAnchorMobile) {
+        const infoLinkMobile = document.createElement("a");
+        infoLinkMobile.classList.add("method-link");
+        infoLinkMobile.href = `/data-sources.html#${methodAnchorMobile}`;
+        infoLinkMobile.setAttribute("aria-label", "See methodology for this chain");
+        infoLinkMobile.textContent = "ⓘ";
+        chainNameMobile.appendChild(infoLinkMobile);
+      }
       const chainTickerMobile = document.createElement("div");
       chainTickerMobile.classList.add("chain-ticker-mobile");
       chainTickerMobile.textContent = ticker;
@@ -265,20 +297,20 @@ function renderTable() {
       metricsTop.classList.add("metrics-top");
       const feeValueMobile = document.createElement("span");
       feeValueMobile.classList.add("fee-value-mobile");
-      feeValueMobile.textContent = displayFee;
+      feeValueMobile.textContent = displayFeeApprox;
       if (feeTitle) {
         feeValueMobile.title = feeTitle;
       }
       const changeValueMobile = document.createElement("span");
       changeValueMobile.classList.add("change-value-mobile", changeClass);
       changeValueMobile.textContent = changeText;
-      metricsTop.append("Fee ", feeValueMobile, " · 24h ", changeValueMobile);
+      metricsTop.append("Fee (est.) ", feeValueMobile, " · 24h ", changeValueMobile);
 
       const metricsBottom = document.createElement("div");
       metricsBottom.classList.add("metrics-bottom");
       const speedMobile = document.createElement("span");
       speedMobile.classList.add("speed-mobile");
-      speedMobile.textContent = speedStr;
+      speedMobile.textContent = speedApprox;
       const statusMobile = document.createElement("span");
       statusMobile.classList.add("status-mobile", "status-cell", `status-${statusStr}`);
       statusMobile.textContent = statusStr;

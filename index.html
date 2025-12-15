@@ -78,7 +78,7 @@
           <li><a href="/">Home</a></li>
           <li><a href="/roadmap.html">Roadmap</a></li>
           <li><a href="/about.html">About</a></li>
-          <li><a href="/data-sources.html">Data Sources</a></li>
+          <li><a href="/data-sources.html">Methods</a></li>
           <li><a href="/donate.html">Donate</a></li>
           <li><a href="/disclaimer.html">Disclaimer</a></li>
         </ul>
@@ -109,6 +109,14 @@
 
       <article class="card">
         <div class="inner">
+          <div class="estimate-box" aria-label="Estimated values notice">
+            <p class="estimate-line">This dashboard shows estimated fees for typical transfers. Actual costs vary by transaction type, congestion, and wallet settings.</p>
+            <p class="estimate-line">このダッシュボードの数値は「典型的な送金」を想定した推定値です。実際のコストは取引内容・混雑・ウォレット設定で変わります。</p>
+            <div class="estimate-link-row">
+              <a class="estimate-link" href="/data-sources.html">Details: Methodology / 詳細：計算方法</a>
+            </div>
+          </div>
+
           <div class="status-legend" aria-label="Status legend">
             <div class="status-legend-title">Status legend</div>
             <ul class="status-legend-list">
@@ -124,9 +132,9 @@
                 <tr>
                   <th class="col-chain">Chain</th>
                   <th class="col-ticker">Ticker</th>
-                  <th class="col-fee" id="fee-header">Fee (USD)</th>
+                  <th class="col-fee" id="fee-header">Fee (est. USD)</th>
                   <th class="col-change">24h change</th>
-                  <th class="col-speed">Speed</th>
+                  <th class="col-speed">Speed (est.)</th>
                   <th class="col-status">Status</th>
                 </tr>
               </thead>
@@ -158,7 +166,7 @@
         <a href="/">Home</a> ·
         <a href="/about.html">About</a> ·
         <a href="/roadmap.html">Roadmap</a> ·
-        <a href="/data-sources.html">Data Sources</a> ·
+        <a href="/data-sources.html">Methods</a> ·
         <a href="/donate.html">Donate</a> ·
         <a href="/disclaimer.html">Disclaimer</a>
       </div>
