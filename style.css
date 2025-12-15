@@ -262,6 +262,13 @@ tbody tr:hover{
   font-size:12px;
   color:var(--muted);
 }
+.fee-table th,
+.fee-table td{
+  white-space:nowrap;
+}
+.fee-table .chain-cell{
+  white-space:nowrap;
+}
 .fee-table .ticker-cell{
   white-space:nowrap;
   font-weight:600;
@@ -334,12 +341,55 @@ tbody tr:hover{
 
 @media(min-width:768px){
   .fee-table{table-layout:fixed;width:100%;}
-  .fee-table .chain-cell{flex-direction:row;align-items:center;gap:10px;white-space:normal;}
+  .fee-table .chain-cell{flex-direction:row;align-items:center;gap:10px;}
   .fee-table .chain-label{font-size:14px;}
+  .fee-table td{padding-top:8px;padding-bottom:8px;}
+}
+
+@media(min-width:768px) and (max-width:959px){
+  .fee-table th,
+  .fee-table td{font-size:13px;}
 
   .fee-table th:nth-child(1),
   .fee-table td:nth-child(1){
-    width:32%;
+    width:26%;
+    padding-right:12px;
+  }
+
+  .fee-table th:nth-child(2),
+  .fee-table td:nth-child(2){
+    width:11%;
+    padding-right:10px;
+  }
+
+  .fee-table th:nth-child(3),
+  .fee-table td:nth-child(3){
+    width:18%;
+    padding-left:8px;
+    text-align:right;
+  }
+
+  .fee-table th:nth-child(4),
+  .fee-table td:nth-child(4){
+    width:15%;
+    text-align:right;
+  }
+
+  .fee-table th:nth-child(5),
+  .fee-table td:nth-child(5){
+    width:15%;
+  }
+
+  .fee-table th:nth-child(6),
+  .fee-table td:nth-child(6){
+    width:15%;
+  }
+}
+
+@media(min-width:960px){
+  .fee-table th:nth-child(1),
+  .fee-table td:nth-child(1){
+    width:26%;
     padding-right:14px;
   }
 
@@ -347,35 +397,30 @@ tbody tr:hover{
   .fee-table td:nth-child(2){
     width:10%;
     padding-right:12px;
-    white-space:nowrap;
   }
 
   .fee-table th:nth-child(3),
   .fee-table td:nth-child(3){
-    width:16%;
-    padding-left:8px;
-    white-space:nowrap;
+    width:18%;
+    padding-left:10px;
+    text-align:right;
   }
 
   .fee-table th:nth-child(4),
   .fee-table td:nth-child(4){
     width:14%;
-    white-space:nowrap;
+    text-align:right;
   }
 
   .fee-table th:nth-child(5),
   .fee-table td:nth-child(5){
-    width:14%;
-    white-space:nowrap;
+    width:16%;
   }
 
   .fee-table th:nth-child(6),
   .fee-table td:nth-child(6){
-    width:14%;
-    white-space:nowrap;
+    width:16%;
   }
-
-  .fee-table td{padding-top:8px;padding-bottom:8px;}
 }
 
 /* Details 列（▾ボタン） */
@@ -494,55 +539,24 @@ footer .note{
 .hidden{display:none!important}
 
 /* Donate page */
-.donate-grid{
-  display:flex;
-  flex-direction:column;
-  gap:16px;
+.page-main{
   max-width:960px;
   margin:0 auto;
+  padding:24px 16px 48px;
 }
 
+.donate-card,
+.wallets-card{
+  margin-bottom:24px;
+}
+
+.donate-card h2,
 .donate-card h3{
   margin-top:0;
   margin-bottom:8px;
 }
 
-.donate-card p{
-  margin-top:0;
-}
-
-.donate-actions{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  margin-top:10px;
-}
-
-.donate-btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:10px 14px;
-  border-radius:10px;
-  font-weight:700;
-  text-decoration:none;
-  transition:transform .12s ease, box-shadow .12s ease;
-}
-
-.donate-btn:hover{transform:translateY(-1px);}
-.donate-btn:active{transform:translateY(0);}
-
-.donate-btn-stripe{
-  background:#635bff;
-  color:#fff;
-  box-shadow:0 4px 14px rgba(99,91,255,.25);
-}
-
-.donate-btn-kofi{
-  background:#29abe0;
-  color:#fff;
-  box-shadow:0 4px 14px rgba(41,171,224,.25);
-}
+.donate-card p{margin-top:0;}
 
 .donate-note{
   color:var(--muted);
@@ -550,58 +564,80 @@ footer .note{
   font-size:13px;
 }
 
+.donate-buttons{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:16px;
+}
+
+.donate-buttons .btn{flex:0 0 auto;}
+
+.btn-secondary{
+  border-color:var(--accent);
+  color:var(--accent);
+  font-weight:600;
+}
+.btn-secondary:hover{border-color:var(--accent-strong);color:var(--accent-strong);}
+
 .wallet-table{
   width:100%;
   border-collapse:collapse;
-  margin-top:6px;
-  font-size:13px;
+  font-size:14px;
+  margin-top:10px;
 }
 
-.wallet-table th,
-.wallet-table td{
+.wallet-table td,
+.wallet-table th{
+  padding:8px 12px;
+  vertical-align:middle;
   border-bottom:1px solid var(--line);
-  padding:6px 8px;
-  text-align:left;
 }
 
-.wallet-table th{color:var(--muted);font-size:12px;}
+.wallet-table th{color:var(--muted);font-size:12px;text-align:left;}
 
-.wallet-address{
-  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+.wallet-table .wallet-address{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size:13px;
   word-break:break-all;
-  font-size:12px;
 }
 
-.donate-columns{
-  display:grid;
-  gap:16px;
-  grid-template-columns:1fr;
+.wallet-table .wallet-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
-.wallet-table th:last-child,
-.wallet-table td:last-child{
-  text-align:right;
-  width:80px;
-}
-.wallet-copy-btn{
-  padding:6px 10px;
+
+.btn-copy{
   font-size:12px;
-  border-radius:8px;
-  border:1px solid var(--line);
-  background:var(--card-elevated);
-  color:var(--fg);
-  cursor:pointer;
-  transition:transform .12s ease, box-shadow .12s ease;
+  padding:4px 8px;
 }
-.wallet-copy-btn:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.06);}
-.wallet-copy-btn:active{transform:translateY(0);}
+
+@media(max-width:640px){
+  .wallet-table th:nth-child(1),
+  .wallet-table td:nth-child(1){
+    width:80px;
+  }
+}
+
+@media(max-width:480px){
+  .donate-buttons{flex-direction:column;align-items:stretch;}
+  .donate-buttons .btn{width:100%;text-align:center;}
+}
 
 /* Responsive tweaks */
 @media(min-width:769px){
   .nav-toggle{display:none;}
   .global-nav{max-height:none!important;overflow:visible;}
   .global-nav ul{justify-content:flex-start;}
-  .fee-table .chain-cell{flex-direction:row;align-items:center;gap:8px;white-space:normal;}
+  .fee-table .chain-cell{flex-direction:row;align-items:center;gap:8px;}
   .fee-table .chain-label{font-size:14px;}
+}
+
+@media(max-width:767px){
+  .fee-table th,
+  .fee-table td,
+  .fee-table .chain-cell{white-space:normal;}
 }
 
 @media(max-width:768px){

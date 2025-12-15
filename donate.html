@@ -52,105 +52,125 @@
     </nav>
   </header>
 
-  <main class="single">
-    <div class="donate-grid">
-      <section class="card donate-card">
-        <div class="inner">
-          <h2 style="margin-top:0;">Donate</h2>
-          <p>
-            CryptoFeeScope is an independent project. Contributions help cover API plans, hosting for live snapshots, and time to
-            ship planned features like historical views and alerts.
-          </p>
-          <p class="donate-note">Thanks for your support—totally optional, always appreciated.</p>
+  <main class="page-main">
+    <section class="card donate-card">
+      <div class="inner">
+        <h2>Donate</h2>
+        <p>
+          CryptoFeeScope is an independent project. Contributions help cover API plans, hosting for live snapshots, and time to
+          ship planned features like historical views and alerts.
+        </p>
+        <p class="donate-note">Thanks for your support—totally optional, always appreciated.</p>
 
-          <div class="donate-columns">
-            <div>
-              <h3>Support via Stripe</h3>
-              <p>You can send a one-time tip via Stripe. No account required.</p>
-              <div class="donate-actions">
-                <a class="donate-btn donate-btn-stripe" href="https://buy.stripe.com/cNi8wI7oPcvS4x528zcIE00" target="_blank" rel="noopener noreferrer">
-                  Donate with Stripe
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <h3>Support via Ko-fi</h3>
-              <p>If you prefer Ko-fi, you can send a small coffee here.</p>
-              <div class="donate-actions">
-                <a class="donate-btn donate-btn-kofi" href="https://ko-fi.com/badjoke_lab" target="_blank" rel="noopener noreferrer">
-                  Visit Ko-fi page
-                </a>
-              </div>
-            </div>
-          </div>
+        <div class="donate-buttons">
+          <a class="btn btn-primary" href="https://buy.stripe.com/cNi8wI7oPcvS4x528zcIE00" target="_blank" rel="noopener noreferrer">
+            Donate with Stripe
+          </a>
+          <a class="btn btn-secondary" href="https://ko-fi.com/badjoke_lab" target="_blank" rel="noopener noreferrer">
+            Visit Ko-fi page
+          </a>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="card donate-card">
-        <div class="inner">
-          <h3>Crypto wallets</h3>
-          <p>Prefer crypto? These addresses support the project directly.</p>
-          <table class="wallet-table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Address</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>BTC</td>
-                <td><code class="wallet-address">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</code></td>
-                <td><button class="wallet-copy-btn" data-address="bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29">Copy</button></td>
-              </tr>
-              <tr>
-                <td>ETH (ERC-20)</td>
-                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
-                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
-              </tr>
-              <tr>
-                <td>USDT (ERC-20)</td>
-                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
-                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
-              </tr>
-              <tr>
-                <td>USDC (ERC-20)</td>
-                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
-                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
-              </tr>
-              <tr>
-                <td>SOL</td>
-                <td><code class="wallet-address">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</code></td>
-                <td><button class="wallet-copy-btn" data-address="Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx">Copy</button></td>
-              </tr>
-              <tr>
-                <td>BNB (BEP-20)</td>
-                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
-                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
-              </tr>
-              <tr>
-                <td>DOGE</td>
-                <td><code class="wallet-address">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</code></td>
-                <td><button class="wallet-copy-btn" data-address="DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU">Copy</button></td>
-              </tr>
-              <tr>
-                <td>AVAX (C-Chain)</td>
-                <td><code class="wallet-address">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</code></td>
-                <td><button class="wallet-copy-btn" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">Copy</button></td>
-              </tr>
-              <tr>
-                <td>XRP</td>
-                <td><code class="wallet-address">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</code></td>
-                <td><button class="wallet-copy-btn" data-address="rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm">Copy</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="hint">If you want your name or org listed as a supporter on the roadmap page, reach out after donating.</p>
-        </div>
-      </section>
-    </div>
+    <section class="card wallets-card">
+      <div class="inner">
+        <h3>Crypto wallets</h3>
+        <p>Prefer crypto? These addresses support the project directly.</p>
+        <table class="wallet-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>BTC</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29">bc1q7hxpndkv0wa44kpufl740wlt60rfrnawr7sv29</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>ETH (ERC-20)</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>USDT (ERC-20)</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>USDC (ERC-20)</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>SOL</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx">Bku2evSRzCZKjovsy31exGWzHQFwd452QCMKvvNfLjx</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>BNB (BEP-20)</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>DOGE</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU">DMiLhuAY3FSPQiGRdpNKjBBYmKaXQzBgMU</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>AVAX (C-Chain)</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="0x8d30208ae2af3ef2748c708ba4304cf3503530c8">0x8d30208ae2af3ef2748c708ba4304cf3503530c8</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>XRP</td>
+              <td>
+                <div class="wallet-actions">
+                  <span class="wallet-address" data-address="rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm">rHSA1dNs7gNSm1VadvxsCoWYrb2AWdS6Pm</span>
+                  <button class="btn btn-ghost btn-copy" type="button">Copy</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="hint">If you want your name or org listed as a supporter on the roadmap page, reach out after donating.</p>
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -208,14 +228,6 @@
         sync();
       }
 
-      const copyButtons = Array.from(document.querySelectorAll('.wallet-copy-btn'));
-      const setButtonState = (btn, label) => {
-        if (!btn) return;
-        btn.textContent = label;
-      };
-      const resetLabel = (btn) => {
-        setTimeout(() => setButtonState(btn, 'Copy'), 1600);
-      };
       const fallbackCopy = (text) => {
         const ta = document.createElement('textarea');
         ta.value = text;
@@ -231,25 +243,32 @@
           document.body.removeChild(ta);
         }
       };
-      const copyAddress = async (btn, address) => {
+
+      document.addEventListener('click', async (event) => {
+        const btn = event.target.closest('.btn-copy');
+        if (!btn) return;
+
+        const cell = btn.closest('td');
+        const addressEl = cell?.querySelector('.wallet-address');
+        const address = addressEl?.dataset?.address || addressEl?.textContent?.trim();
         if (!address) return;
+
         try {
           if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(address);
-          } else {
-            const ok = fallbackCopy(address);
-            if (!ok) throw new Error('Copy failed');
+          } else if (!fallbackCopy(address)) {
+            throw new Error('Copy failed');
           }
-          setButtonState(btn, 'Copied!');
-          resetLabel(btn);
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = 'Copy';
+          }, 1500);
         } catch (err) {
-          alert('Could not copy address. Please copy manually.');
+          btn.textContent = 'Error';
+          setTimeout(() => {
+            btn.textContent = 'Copy';
+          }, 1500);
         }
-      };
-
-      copyButtons.forEach((btn) => {
-        const address = btn?.dataset?.address || '';
-        btn.addEventListener('click', () => copyAddress(btn, address));
       });
     })();
   </script>
