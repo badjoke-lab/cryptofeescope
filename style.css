@@ -186,6 +186,21 @@ main.single{
 }
 .card .inner{padding:14px}
 
+.estimate-box{
+  border:1px solid var(--line);
+  background:rgba(107,114,128,0.08);
+  border-radius:10px;
+  padding:10px 12px;
+  margin-bottom:12px;
+  font-size:13px;
+  line-height:1.5;
+}
+.estimate-line{margin:0 0 6px 0;}
+.estimate-line:last-of-type{margin-bottom:8px;}
+.estimate-link-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.estimate-link{color:var(--fg);font-weight:600;text-decoration:none;border-bottom:1px solid transparent;}
+.estimate-link:hover{color:var(--accent);border-color:var(--accent);}
+
 /* Search & filters */
 .search{
   display:flex;
@@ -258,6 +273,13 @@ tbody tr:hover{
   min-width:150px;
 }
 .fee-table .chain-label{font-weight:700;}
+.method-link{
+  margin-left:6px;
+  font-size:12px;
+  color:var(--muted);
+  text-decoration:none;
+}
+.method-link:hover{color:var(--accent);}
 .fee-table .chain-ticker{
   font-size:12px;
   color:var(--muted);
