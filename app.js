@@ -233,7 +233,7 @@ function renderTable() {
       if (methodAnchor) {
         const infoLink = document.createElement("a");
         infoLink.classList.add("method-link");
-        infoLink.href = `/data-sources.html#${methodAnchor}`;
+        infoLink.href = `/methods/#${methodAnchor}`;
         infoLink.setAttribute("aria-label", "See methodology for this chain");
         infoLink.textContent = "ⓘ";
         chainLabelEl.appendChild(infoLink);
@@ -280,7 +280,7 @@ function renderTable() {
       if (methodAnchorMobile) {
         const infoLinkMobile = document.createElement("a");
         infoLinkMobile.classList.add("method-link");
-        infoLinkMobile.href = `/data-sources.html#${methodAnchorMobile}`;
+        infoLinkMobile.href = `/methods/#${methodAnchorMobile}`;
         infoLinkMobile.setAttribute("aria-label", "See methodology for this chain");
         infoLinkMobile.textContent = "ⓘ";
         chainNameMobile.appendChild(infoLinkMobile);
