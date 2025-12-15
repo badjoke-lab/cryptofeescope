@@ -709,15 +709,11 @@ footer .note{
   .global-nav ul{flex-direction:column;align-items:flex-start;padding:10px 16px;}
 }
 
-@media(min-width:481px){
+@media(min-width:571px){
   #fee-table-body-mobile{display:none;}
 }
 
-@media(max-width:480px){
-  html,
-  body{overflow-x:hidden;}
-  .pill{white-space:normal;font-size:11px;}
-  .updated-label{display:block;margin-top:4px;font-size:11px;}
+@media(max-width:570px){
   #fee-table-body{display:none;}
   #fee-table-body-mobile{display:table-row-group;}
   .fee-table{table-layout:auto;}
@@ -761,6 +757,13 @@ footer .note{
   .change-value-mobile{font-variant-numeric:tabular-nums;}
   .speed-mobile{font-size:12px;}
   .status-mobile{font-size:12px;text-transform:capitalize;}
+}
+
+@media(max-width:480px){
+  html,
+  body{overflow-x:hidden;}
+  .pill{white-space:normal;font-size:11px;}
+  .updated-label{display:block;margin-top:4px;font-size:11px;}
   .card .inner{padding:12px;}
   .btn .label{display:none;}
   .btn{padding-inline:8px;}
