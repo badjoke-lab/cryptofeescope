@@ -26,7 +26,7 @@
           <img src="/assets/logo.svg" alt="CryptoFeeScope logo">
           <div>
             <div>CryptoFeeScope</div>
-            <div class="sub">Methodology / 計算方法</div>
+            <div class="sub">Methodology</div>
           </div>
         </div>
       </a>
@@ -44,7 +44,7 @@
           <li><a href="/">Home</a></li>
           <li><a href="/roadmap.html">Roadmap</a></li>
           <li><a href="/about.html">About</a></li>
-          <li><a href="/methods/">Methods</a></li>
+          <li><a href="/methods/">Methodology</a></li>
           <li><a href="/donate.html">Donate</a></li>
           <li><a href="/disclaimer.html">Disclaimer</a></li>
         </ul>
@@ -55,48 +55,44 @@
   <main class="single">
     <div class="card">
       <div class="inner">
-        <h2 style="margin-top:0;">Methodology / 計算方法</h2>
+        <h2 style="margin-top:0;">Methodology</h2>
         <p>
-          CryptoFeeScope shows <strong>estimated</strong> fees and speeds for a <strong>typical transfer</strong> on each supported chain. Use these numbers for quick comparison, not as guaranteed quotes. このダッシュボードは各チェーンの<strong>典型的な送金</strong>に対する<strong>推定値</strong>を表示しており、実際のコスト・所要時間は状況により変わります。
+          CryptoFeeScope shows <strong>estimated</strong> fees and speeds for a <strong>typical transfer</strong> on each supported chain. Use these numbers for quick comparison, not as guaranteed quotes.
         </p>
 
-        <h3>What you see on the dashboard / このページで見られるもの</h3>
+        <h3>What you see on the dashboard</h3>
         <ul>
-          <li><strong>Fee (est.)</strong>: typical network fee expressed in USD or JPY. 推定ネットワーク手数料（USD/JPY換算）。</li>
-          <li><strong>Speed (est.)</strong>: rough time to first confirmation. 概算の初回承認までの時間。</li>
-          <li><strong>Status</strong>: fast / normal / slow labels defined for this site. 本サイト定義のステータス表示。</li>
-          <li><strong>Tier</strong>: future label for priority classes; currently a single standard tier is assumed. 将来の優先度ラベル枠（現状は標準のみ）。</li>
+          <li><strong>Fee (est.)</strong>: typical network fee expressed in USD or JPY.</li>
+          <li><strong>Speed (est.)</strong>: rough time to first confirmation.</li>
+          <li><strong>Status</strong>: fast / normal / slow labels defined for this site.</li>
+          <li><strong>Tier</strong>: future label for priority classes; currently a single standard tier is assumed.</li>
         </ul>
 
-        <h3>Shared assumptions / 共通前提</h3>
+        <h3>Shared assumptions</h3>
         <ul>
-          <li><strong>Typical transfer</strong>: basic asset transfer without complex contract calls. 実費ではなく、単純送金モデルを前提。</li>
-          <li><strong>FX conversion</strong>: USD/JPY values are conversions, not quotes from a specific wallet. 為替換算であり特定ウォレットの見積もりではありません。</li>
-          <li><strong>Refresh cadence</strong>: snapshot JSON is refreshed roughly every 10 minutes in this demo build. デモでは約10分ごとにスナップショットを更新。</li>
-          <li><strong>Not investment advice</strong>: numbers are indicative and may differ from what you pay. 参考値であり投資助言や確定額ではありません。</li>
+          <li><strong>Typical transfer</strong>: basic asset transfer without complex contract calls.</li>
+          <li><strong>FX conversion</strong>: USD/JPY values are conversions, not quotes from a specific wallet.</li>
+          <li><strong>Refresh cadence</strong>: snapshot JSON is refreshed roughly every 10 minutes in this demo build.</li>
+          <li><strong>Not investment advice</strong>: numbers are indicative and may differ from what you pay.</li>
         </ul>
 
-        <h3>Comparability / 同一基準の比較</h3>
+        <h3>Comparability (Apples-to-apples?)</h3>
         <ul>
           <li>Unlike fiat/BTC-denominated market data, network fees are not a single universal metric. Each chain has a different fee mechanism (gas, tx size, resources, L1 data, etc.).</li>
           <li>CryptoFeeScope compares “typical transfer” estimates per chain. This is close to a common baseline for simple transfers, but it is not a guaranteed apples-to-apples quote across all chains.</li>
           <li>Sending $100 instead of $10 usually does not change the network fee for most chains. Fees depend more on transaction type/size and congestion than transfer amount.</li>
           <li>For stricter comparisons, we plan scenario modes in later versions (e.g., Native transfer / Stablecoin transfer / Swap).</li>
-          <li>CMC/CoinGeckoのような「法定通貨建て・BTC建て」の価格比較と違い、ネットワーク手数料はチェーンごとに仕組み（gas、取引サイズ、資源、L1データ費用など）が異なるため、完全な同一基準にはなりません。</li>
-          <li>そのためCryptoFeeScopeは、各チェーンの「典型的な送金（単純送金）」を想定した推定値として比較します。単純送金どうしの比較としては共通基準に近づきますが、全チェーンで完全一致の確定見積を保証するものではありません。</li>
-          <li>また「$100送金」など送金額条件は、多くのチェーンでは手数料にほぼ影響しません（手数料は金額よりも取引内容・サイズ・混雑の影響が大きい）。</li>
-          <li>より厳密な比較のため、将来的に「シナリオ別（Native / ステーブル送金 / Swap）」など比較モードを追加する予定です。</li>
         </ul>
 
-        <h3>Data sources (current demo) / データソース</h3>
+        <h3>Data sources (current demo)</h3>
         <ul>
           <li>Demo snapshot at <code>/data/fee_snapshot_demo.json</code> generated via GitHub Actions, hosted on Cloudflare Pages.</li>
-          <li>Price basis from CoinGecko Demo; fee hints are simplified for UX testing. CoinGecko Demo価格と簡易feeモデルを使用。</li>
+          <li>Price basis from CoinGecko Demo; fee hints are simplified for UX testing.</li>
           <li>Planned: swap in production-grade APIs (mempool.space, gasprice.io, Blocknative, OKLink, DefiLlama, etc.) and surface provider labels per row.</li>
         </ul>
 
-        <h3>Chain-level methodology / チェーン別モデル</h3>
-        <p class="hint">Click a ticker in the table (ⓘ) to jump to each section. テーブルのⓘから各チェーンの前提へ移動できます。</p>
+        <h3>Chain-level methodology</h3>
+        <p class="hint">Click a ticker in the table (ⓘ) to jump to each section.</p>
         <ul>
           <li><a href="#btc">Bitcoin</a> · <a href="#eth">Ethereum</a> · <a href="#bsc">BSC</a> · <a href="#solana">Solana</a></li>
           <li><a href="#tron">TRON</a> · <a href="#avax">Avalanche</a> · <a href="#xrp">XRP Ledger</a> · <a href="#arbitrum">Arbitrum</a> · <a href="#optimism">Optimism</a></li>
@@ -104,59 +100,56 @@
 
         <h4 id="btc">BTC</h4>
         <ul>
-          <li>EN: Assumption: typical on-chain transfer size (tx vbytes varies by inputs/outputs).</li>
-          <li>JA: 想定：典型的なBTC送金（入出力数でサイズが変わるため概算）。</li>
-          <li>Limits: Congestion & tx size change the actual fee. / 混雑と取引サイズで変動。</li>
+          <li>Assumption: typical on-chain transfer size (tx vbytes varies by inputs/outputs).</li>
+          <li>Limits: congestion and transaction size change the actual fee.</li>
         </ul>
 
         <h4 id="eth">ETH</h4>
         <ul>
-          <li>EN: Assumption: native transfer (≈21,000 gas) with current base/priority estimate.</li>
-          <li>JA: 想定：ネイティブ送金（約21,000 gas想定）＋現在のガス推定。</li>
-          <li>Limits: Contract calls cost more. / コントラクト操作は増える。</li>
+          <li>Assumption: native transfer (≈21,000 gas) with current base/priority estimate.</li>
+          <li>Limits: contract calls cost more.</li>
         </ul>
 
         <h4 id="bsc">BSC</h4>
         <ul>
-          <li>EN: Assumption: native transfer with typical gas usage; network pricing differs from ETH.</li>
-          <li>JA: 想定：ネイティブ送金想定。ETHとは価格形成が異なる。</li>
-          <li>Limits: Tx type & congestion vary. / 取引内容・混雑で変動。</li>
+          <li>Assumption: native transfer with typical gas usage; network pricing differs from ETH.</li>
+          <li>Limits: transaction type and congestion can shift final cost.</li>
         </ul>
 
         <h4 id="arbitrum">ARBITRUM</h4>
         <ul>
-          <li>EN: Assumption: L2 fee includes L1 data component; shown as typical estimate.</li>
-          <li>JA: 想定：L2手数料（L1データ費用を含む）を典型モデルで推定。</li>
+          <li>Assumption: L2 fee includes the L1 data component; shown as a typical estimate.</li>
+          <li>Limits: L1 data fees can fluctuate with congestion.</li>
         </ul>
 
         <h4 id="optimism">OPTIMISM</h4>
         <ul>
-          <li>EN: Assumption: L2 fee includes L1 data component; shown as typical estimate.</li>
-          <li>JA: 想定：L2手数料（L1データ費用を含む）を典型モデルで推定。</li>
+          <li>Assumption: L2 fee includes the L1 data component; shown as a typical estimate.</li>
+          <li>Limits: L1 data fees can fluctuate with congestion.</li>
         </ul>
 
         <h4 id="solana">SOL</h4>
         <ul>
-          <li>EN: Assumption: base fee + typical priority fee (if used); most simple transfers are near base fee.</li>
-          <li>JA: 想定：基本手数料＋（必要時）典型priority fee。単純送金は基本に近いことが多い。</li>
+          <li>Assumption: base fee plus a typical priority fee (if used); most simple transfers are near base fee.</li>
+          <li>Limits: priority fees can rise under load.</li>
         </ul>
 
         <h4 id="tron">TRON</h4>
         <ul>
-          <li>EN: Assumption: cost varies by Energy/Bandwidth; shown as a generic estimate.</li>
-          <li>JA: 想定：Energy/Bandwidth（資源）の有無で体感コストが大きく変わるため一般モデルで推定。</li>
+          <li>Assumption: cost varies by Energy/Bandwidth; shown as a generic estimate.</li>
+          <li>Limits: resource availability changes the effective fee.</li>
         </ul>
 
         <h4 id="avax">AVAX</h4>
         <ul>
-          <li>EN: Assumption: C-Chain EVM-style fee model with typical transfer.</li>
-          <li>JA: 想定：C-ChainのEVM型モデルで典型送金を推定。</li>
+          <li>Assumption: C-Chain EVM-style fee model with a typical transfer.</li>
+          <li>Limits: congestion and gas price swings affect the paid fee.</li>
         </ul>
 
         <h4 id="xrp">XRP</h4>
         <ul>
-          <li>EN: Assumption: network base fee estimate; can increase during load.</li>
-          <li>JA: 想定：ネットワーク基準フィーの推定。負荷時に上がることがある。</li>
+          <li>Assumption: network base fee estimate; can increase during load.</li>
+          <li>Limits: spikes in demand can raise the minimum fee.</li>
         </ul>
       </div>
     </div>
@@ -172,7 +165,7 @@
         <a href="/">Home</a> ·
         <a href="/about.html">About</a> ·
         <a href="/roadmap.html">Roadmap</a> ·
-        <a href="/methods/">Methods</a> ·
+        <a href="/methods/">Methodology</a> ·
         <a href="/donate.html">Donate</a> ·
         <a href="/disclaimer.html">Disclaimer</a>
       </div>
@@ -219,7 +212,7 @@
     })();
   </script>
   <!-- Cloudflare Web Analytics -->
-  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475ee54e4"}'></script>
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
   <!-- End Cloudflare Web Analytics -->
 </body>
 </html>
