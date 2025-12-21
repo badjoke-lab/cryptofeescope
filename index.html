@@ -127,6 +127,35 @@
           </div>
           <p class="updated-label">Updated <span id="updated-label">—</span></p>
           <p class="freshness-note">History: <span id="history-freshness">—</span></p>
+          <div class="controls-row" aria-label="Table controls">
+            <label class="control" for="search">
+              <span class="control-title">Search</span>
+              <input id="search" type="search" name="search" placeholder="Search chain or ticker…" />
+            </label>
+            <label class="control" for="statusFilter">
+              <span class="control-title">Status</span>
+              <select id="statusFilter" name="status">
+                <option value="all">All</option>
+                <option value="fast">Fast</option>
+                <option value="normal">Normal</option>
+                <option value="slow">Slow</option>
+                <option value="unknown">Unknown</option>
+                <option value="error">Error</option>
+              </select>
+            </label>
+            <label class="control" for="sortBy">
+              <span class="control-title">Sort</span>
+              <select id="sortBy" name="sort">
+                <option value="default">Default</option>
+                <option value="fee_asc">Fee (low → high)</option>
+                <option value="fee_desc">Fee (high → low)</option>
+                <option value="speed_asc">Speed (fast → slow)</option>
+                <option value="speed_desc">Speed (slow → fast)</option>
+                <option value="chain_asc">Chain (A → Z)</option>
+                <option value="chain_desc">Chain (Z → A)</option>
+              </select>
+            </label>
+          </div>
           <div class="fee-table-wrapper">
             <table class="fee-table">
               <thead>
@@ -146,6 +175,7 @@
                 <!-- Rendered via JS (mobile only) -->
               </tbody>
             </table>
+            <p id="empty-note" class="empty-note hidden">No chains match your filters.</p>
           </div>
         </div>
       </article>

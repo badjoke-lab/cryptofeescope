@@ -84,8 +84,23 @@ async function fetchFeeSnapshot() {
 const state = {
   snapshot: null,
   currency: "usd", // "usd" | "jpy"
+  searchQuery: "",
+  filterStatus: "all",
+  sortBy: "default",
+  allRows: [],
 };
 let historyMeta = null;
+
+const VALID_STATUSES = ["all", "fast", "normal", "slow", "unknown", "error"];
+const VALID_SORTS = [
+  "default",
+  "fee_asc",
+  "fee_desc",
+  "speed_asc",
+  "speed_desc",
+  "chain_asc",
+  "chain_desc",
+];
 
 const METHOD_ANCHORS = {
   btc: "btc",
@@ -182,17 +197,103 @@ function formatAge(ageSec) {
 }
 
 // ----- Rendering -----
-function renderTable() {
+function buildRowsFromSnapshot(snapshot) {
+  if (!snapshot || !snapshot.chains) return [];
+  return Object.entries(snapshot.chains).map(([key, chain], index) => ({
+    key,
+    index,
+    ...chain,
+  }));
+}
+
+function getTicker(row) {
+  if (!row) return "";
+  if (row.native && typeof row.native.symbol === "string" && row.native.symbol.trim()) {
+    return row.native.symbol.trim();
+  }
+  if (row.ticker && typeof row.ticker === "string" && row.ticker.trim()) {
+    return row.ticker.trim();
+  }
+  return (row.key || "").toUpperCase();
+}
+
+function matchesSearch(row, query) {
+  if (!query) return true;
+  const haystack = [row.label, row.key, getTicker(row)]
+    .filter(Boolean)
+    .map((s) => s.toString().toLowerCase())
+    .join("\n");
+  return haystack.includes(query);
+}
+
+function compareWithNullsLast(a, b, direction = "asc") {
+  const dir = direction === "desc" ? -1 : 1;
+  const aNull = a == null || !Number.isFinite(a);
+  const bNull = b == null || !Number.isFinite(b);
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  if (a > b) return dir;
+  if (a < b) return -dir;
+  return 0;
+}
+
+function sortRows(rows) {
+  const sortKey = state.sortBy;
+  if (sortKey === "default") return rows;
+
+  const currencyKey = state.currency === "jpy" ? "feeJPY" : "feeUSD";
+
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    if (sortKey === "fee_asc") {
+      return compareWithNullsLast(a[currencyKey], b[currencyKey], "asc");
+    }
+    if (sortKey === "fee_desc") {
+      return compareWithNullsLast(a[currencyKey], b[currencyKey], "desc");
+    }
+    if (sortKey === "speed_asc") {
+      return compareWithNullsLast(a.speedSec, b.speedSec, "asc");
+    }
+    if (sortKey === "speed_desc") {
+      return compareWithNullsLast(a.speedSec, b.speedSec, "desc");
+    }
+    if (sortKey === "chain_asc") {
+      return (a.label || "").localeCompare(b.label || "");
+    }
+    if (sortKey === "chain_desc") {
+      return (b.label || "").localeCompare(a.label || "");
+    }
+    return 0;
+  });
+  return sorted;
+}
+
+function getVisibleRows() {
+  const baseRows = state.allRows || [];
+  const query = state.searchQuery.trim().toLowerCase();
+  const filtered = baseRows.filter((row) => {
+    const rowStatus = (row.status || "unknown").toLowerCase();
+    const statusMatch = state.filterStatus === "all" || rowStatus === state.filterStatus;
+    return statusMatch && matchesSearch(row, query);
+  });
+  return sortRows(filtered);
+}
+
+function renderTable(rows) {
   const tbody = document.getElementById("fee-table-body");
   const tbodyMobile = document.getElementById("fee-table-body-mobile");
   const header = document.getElementById("fee-header");
   if (header) {
     header.textContent = state.currency === "usd" ? "Fee (est. USD)" : "Fee (est. JPY)";
   }
+  const emptyNote = document.getElementById("empty-note");
+
   if (!state.snapshot) return;
 
   const currency = state.currency; // "usd" or "jpy"
-  const chains = state.snapshot.chains || {};
+
+  const rowsToRender = Array.isArray(rows) ? rows : [];
 
   if (tbody) {
     tbody.textContent = "";
@@ -201,7 +302,14 @@ function renderTable() {
     tbodyMobile.textContent = "";
   }
 
-  Object.entries(chains).forEach(([key, chain]) => {
+  if (!rowsToRender.length && emptyNote) {
+    emptyNote.classList.remove("hidden");
+  } else if (emptyNote) {
+    emptyNote.classList.add("hidden");
+  }
+
+  rowsToRender.forEach((chain) => {
+    const key = chain.key;
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
     const currencyCode = currency.toUpperCase();
     const rawFee = chain[currencyKey];
@@ -214,7 +322,7 @@ function renderTable() {
         : "";
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const speedApprox = speedStr === "—" ? speedStr : `≈ ${speedStr}`;
-    const statusStr = chain.status || "unknown";
+    const statusStr = (chain.status || "unknown").toLowerCase();
     const changePct = chain.priceChange24hPct;
     let changeText = "—";
     let changeClass = "change-flat";
@@ -228,7 +336,7 @@ function renderTable() {
     }
 
     // キーを利用した簡易ticker。後でchains.jsonと統合予定
-    const ticker = (key || "?").toUpperCase();
+    const ticker = getTicker(chain);
 
     if (tbody) {
       const tr = document.createElement("tr");
@@ -353,10 +461,11 @@ async function loadSnapshotAndRender() {
   try {
     const snapshot = await fetchFeeSnapshot();
     state.snapshot = snapshot;
+    state.allRows = buildRowsFromSnapshot(snapshot);
     if (updatedEl) {
       updatedEl.textContent = formatUpdated(snapshot.generatedAt);
     }
-    renderTable();
+    renderTable(getVisibleRows());
     renderFreshness();
   } catch (err) {
     console.error(err);
@@ -398,14 +507,14 @@ function bindCurrencyButtons() {
     usdBtn.addEventListener("click", () => {
       state.currency = "usd";
       syncActive();
-      renderTable();
+      renderTable(getVisibleRows());
     });
   }
   if (jpyBtn) {
     jpyBtn.addEventListener("click", () => {
       state.currency = "jpy";
       syncActive();
-      renderTable();
+      renderTable(getVisibleRows());
     });
   }
 
@@ -436,9 +545,81 @@ function bindNavToggle() {
   syncForViewport();
 }
 
+function applyQueryParamsFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const qParam = params.get("q");
+  const statusParam = params.get("status");
+  const sortParam = params.get("sort");
+
+  state.searchQuery = typeof qParam === "string" ? qParam : "";
+  const normalizedStatus = typeof statusParam === "string" ? statusParam.toLowerCase() : null;
+  if (VALID_STATUSES.includes(normalizedStatus)) {
+    state.filterStatus = normalizedStatus;
+  }
+  const normalizedSort = typeof sortParam === "string" ? sortParam.toLowerCase() : null;
+  if (VALID_SORTS.includes(normalizedSort)) {
+    state.sortBy = normalizedSort;
+  }
+}
+
+function syncQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+
+  if (state.searchQuery) params.set("q", state.searchQuery);
+  else params.delete("q");
+
+  if (state.filterStatus && state.filterStatus !== "all") params.set("status", state.filterStatus);
+  else params.delete("status");
+
+  if (state.sortBy && state.sortBy !== "default") params.set("sort", state.sortBy);
+  else params.delete("sort");
+
+  const newQuery = params.toString();
+  const newUrl = newQuery ? `${window.location.pathname}?${newQuery}` : window.location.pathname;
+  if (newUrl !== window.location.pathname + window.location.search) {
+    history.replaceState({}, "", newUrl);
+  }
+}
+
+function bindTableControls() {
+  const searchInput = document.getElementById("search");
+  const statusSelect = document.getElementById("statusFilter");
+  const sortSelect = document.getElementById("sortBy");
+
+  if (searchInput) {
+    searchInput.value = state.searchQuery;
+    searchInput.addEventListener("input", () => {
+      state.searchQuery = searchInput.value;
+      syncQueryParams();
+      renderTable(getVisibleRows());
+    });
+  }
+
+  if (statusSelect) {
+    statusSelect.value = VALID_STATUSES.includes(state.filterStatus) ? state.filterStatus : "all";
+    statusSelect.addEventListener("change", () => {
+      const value = statusSelect.value;
+      state.filterStatus = VALID_STATUSES.includes(value) ? value : "all";
+      syncQueryParams();
+      renderTable(getVisibleRows());
+    });
+  }
+
+  if (sortSelect) {
+    sortSelect.value = VALID_SORTS.includes(state.sortBy) ? state.sortBy : "default";
+    sortSelect.addEventListener("change", () => {
+      const value = sortSelect.value;
+      state.sortBy = VALID_SORTS.includes(value) ? value : "default";
+      syncQueryParams();
+      renderTable(getVisibleRows());
+    });
+  }
+}
+
 // ----- Init -----
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme(getInitialTheme());
+  applyQueryParamsFromUrl();
 
   const refreshBtn = document.getElementById("refresh-button");
   if (refreshBtn) {
@@ -455,6 +636,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  bindTableControls();
   bindCurrencyButtons();
   bindNavToggle();
   loadSnapshotAndRender();
