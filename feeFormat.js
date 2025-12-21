@@ -78,6 +78,29 @@ function formatFeeDisplay(feeUSD, currency, fxRate) {
 }
 
 /**
+ * Shared home/stats formatter for displaying fees with consistent precision.
+ * - USD: < 0.1 -> 6 decimals, < 1 -> 4 decimals, otherwise 2 decimals
+ * - JPY: < 10 -> 2 decimals, otherwise 0 decimals
+ * - returns "—" for null/NaN
+ */
+function formatFeeWithPrecision(value, currency) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+
+  const symbol = getCurrencySymbol(currency);
+  const abs = Math.abs(num);
+  let digits;
+
+  if (currency === "JPY") {
+    digits = abs < 10 ? 2 : 0;
+  } else {
+    digits = abs < 0.1 ? 6 : abs < 1 ? 4 : 2;
+  }
+
+  return `${symbol}${num.toFixed(digits)}`;
+}
+
+/**
  * ポップアップに表示する詳細情報
  * - exactLabel: 完全な値
  * - zeroCountLabel: 0.0…xx 形式（必要なときだけ）
