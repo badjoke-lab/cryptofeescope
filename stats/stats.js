@@ -24,6 +24,11 @@
     meta: null,
   };
 
+  const chartUI = {
+    points: [],
+    tooltip: null,
+  };
+
   function parseQuery() {
     const params = new URLSearchParams(location.search);
     const chain = params.get('chain');
@@ -48,13 +53,13 @@
   }
 
   function formatUsd(value) {
-    if (value == null || Number.isNaN(value)) return '—';
-    const abs = Math.abs(value);
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    const abs = Math.abs(num);
     let digits = 2;
-    if (abs < 1) digits = abs < 0.01 ? 6 : 4;
-    let out = value.toFixed(digits);
-    out = out.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
-    return `$${out}`;
+    if (abs < 0.1) digits = 6;
+    else if (abs < 1) digits = 4;
+    return `$${num.toFixed(digits)}`;
   }
 
   function formatTime(ts, range) {
@@ -73,6 +78,66 @@
     if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
     if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
     return `${Math.round(ageSec / 86400)} d ago`;
+  }
+
+  function ensureTooltip() {
+    if (chartUI.tooltip || !els.chart) return;
+    const wrap = els.chart.parentElement;
+    if (!wrap) return;
+    const tip = document.createElement('div');
+    tip.className = 'chart-tooltip hidden';
+    wrap.appendChild(tip);
+    chartUI.tooltip = tip;
+  }
+
+  function hideTooltip() {
+    if (!chartUI.tooltip) return;
+    chartUI.tooltip.classList.add('hidden');
+  }
+
+  function showTooltip(pt) {
+    if (!chartUI.tooltip) return;
+    chartUI.tooltip.innerHTML = `<div class="tooltip-time">${formatTime(pt.ts, state.range)}</div><div class="tooltip-value">${formatUsd(pt.feeUsd)}</div>`;
+    chartUI.tooltip.style.left = `${pt.x}px`;
+    chartUI.tooltip.style.top = `${pt.y}px`;
+    chartUI.tooltip.classList.remove('hidden');
+  }
+
+  function findNearestPoint(x) {
+    if (!chartUI.points.length) return null;
+    let best = chartUI.points[0];
+    let bestDist = Math.abs(x - best.x);
+    for (let i = 1; i < chartUI.points.length; i++) {
+      const dist = Math.abs(x - chartUI.points[i].x);
+      if (dist < bestDist) {
+        best = chartUI.points[i];
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  function handleChartPointer(evt) {
+    if (!els.chart) return;
+    const rect = els.chart.getBoundingClientRect();
+    const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+    const x = clientX - rect.left;
+    const nearest = findNearestPoint(x);
+    if (!nearest) {
+      hideTooltip();
+      return;
+    }
+    showTooltip(nearest);
+  }
+
+  function setupChartTooltip() {
+    if (!els.chart) return;
+    ensureTooltip();
+    els.chart.addEventListener('mousemove', handleChartPointer);
+    els.chart.addEventListener('mouseleave', hideTooltip);
+    els.chart.addEventListener('touchstart', handleChartPointer, { passive: true });
+    els.chart.addEventListener('touchmove', handleChartPointer, { passive: true });
+    els.chart.addEventListener('touchend', hideTooltip);
   }
 
   function renderSummary() {
@@ -114,18 +179,22 @@
 
     ctx.clearRect(0, 0, width, height);
     const points = state.history;
+    chartUI.points = [];
+    hideTooltip();
     if (!points.length) return;
 
-    let min = Math.min(...points.map(p => p.feeUsd));
-    let max = Math.max(...points.map(p => p.feeUsd));
-    if (min === max) {
-      const pad = min === 0 ? 1 : Math.abs(min) * 0.1;
-      min -= pad;
-      max += pad;
+    const fees = points.map(p => p.feeUsd);
+    const minVal = Math.min(...fees);
+    const maxVal = Math.max(...fees);
+    const allEqual = minVal === maxVal;
+    let min = minVal;
+    let max = maxVal;
+    if (!allEqual) {
+      const padY = (max - min) * 0.08;
+      min -= padY;
+      max += padY;
     }
-    const padY = (max - min) * 0.08;
-    min -= padY;
-    max += padY;
+    const span = allEqual ? 1 : (max - min || 1);
 
     const padLeft = 36;
     const padRight = 12;
@@ -147,8 +216,9 @@
     ctx.beginPath();
     points.forEach((pt, idx) => {
       const x = padLeft + dx * idx;
-      const yRatio = (pt.feeUsd - min) / (max - min || 1);
+      const yRatio = allEqual ? 0.5 : (pt.feeUsd - min) / span;
       const y = padTop + innerH - innerH * yRatio;
+      chartUI.points.push({ x, y, ts: pt.ts, feeUsd: pt.feeUsd });
       if (idx === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -205,7 +275,12 @@
     const data = await res.json();
     const pts = Array.isArray(data?.points) ? data.points : [];
     state.history = pts
-      .filter(p => typeof p.feeUsd === 'number' && typeof p.ts === 'number')
+      .map(p => ({
+        ...p,
+        feeUsd: Number(p.feeUsd),
+        ts: Number(p.ts),
+      }))
+      .filter(p => Number.isFinite(p.feeUsd) && Number.isFinite(p.ts))
       .sort((a,b) => a.ts - b.ts);
   }
 
@@ -308,6 +383,7 @@
   syncControls();
   handleControlEvents();
   setupThemeAndNav();
+  setupChartTooltip();
   setupResize();
   refresh();
 })();
