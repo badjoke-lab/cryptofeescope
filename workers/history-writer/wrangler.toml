@@ -1,0 +1,14 @@
+name = "cryptofeescope-history-writer"
+main = "src/index.js"
+compatibility_date = "2024-06-20"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cryptofeescope"
+database_id = "YOUR_D1_DATABASE_ID"
+
+[vars]
+SNAPSHOT_URL = "https://cryptofeescope.pages.dev/data/fee_snapshot_demo.json"
