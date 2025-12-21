@@ -17,14 +17,35 @@ function toUnixSeconds(input) {
   return null;
 }
 
-function sanitizeNumber(value) {
+function sanitizeFee(value, max) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (value < 0) return null;
+  if (typeof max === "number" && value > max) return null;
+  return value;
+}
+
+function normalizeNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function sanitizeSpeed(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return value > 0 ? value : null;
 }
 
 function sanitizeStatus(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  return trimmed.length > 0 && trimmed.length <= 64 ? trimmed : null;
+  return trimmed.length > 0 && trimmed.length <= 24 ? trimmed : null;
+}
+
+function clampInt(value, min, max) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return min;
+  const int = Math.floor(num);
+  if (int < min) return min;
+  if (int > max) return max;
+  return int;
 }
 
 function getSnapshotTimestamp(data) {
@@ -43,9 +64,9 @@ function parseChains(data) {
   for (const [chain, payload] of entries) {
     if (typeof chain !== "string") continue;
     if (!payload || typeof payload !== "object") continue;
-    const feeUsd = sanitizeNumber(payload.feeUSD);
-    const feeJpy = sanitizeNumber(payload.feeJPY);
-    const speedSec = sanitizeNumber(payload.speedSec);
+    const feeUsd = normalizeNumber(payload.feeUSD);
+    const feeJpy = normalizeNumber(payload.feeJPY);
+    const speedSec = normalizeNumber(payload.speedSec);
     const status = sanitizeStatus(payload.status);
     rows.push({ chain, feeUsd, feeJpy, speedSec, status });
   }
@@ -65,7 +86,7 @@ async function fetchSnapshot(url) {
 }
 
 async function writeRows(env, ts, rows) {
-  if (!rows.length) return;
+  if (!rows.length) return 0;
   const sql = `INSERT OR IGNORE INTO fee_history_points
     (ts, chain, fee_usd, fee_jpy, speed_sec, status, source, model)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -73,6 +94,7 @@ async function writeRows(env, ts, rows) {
     env.DB.prepare(sql).bind(ts, chain, feeUsd, feeJpy, speedSec, status, "demo_snapshot", "typical_native_transfer")
   );
   await env.DB.batch(statements);
+  return statements.length;
 }
 
 export default {
@@ -87,9 +109,41 @@ export default {
     }
 
     const ts = getSnapshotTimestamp(data);
-    const rows = parseChains(data);
+    console.log("Fetched snapshot ts", ts);
+    const rows = parseChains(data)
+      .map(({ chain, feeUsd, feeJpy, speedSec, status }) => {
+        const cleanedFeeUsd = sanitizeFee(feeUsd, 1000);
+        const cleanedFeeJpy = sanitizeFee(feeJpy, 150000);
+        const cleanedSpeed = sanitizeSpeed(speedSec);
+        const cleanedStatus = sanitizeStatus(status);
+        return {
+          chain,
+          feeUsd: cleanedFeeUsd,
+          feeJpy: cleanedFeeJpy,
+          speedSec: cleanedSpeed,
+          status: cleanedStatus,
+        };
+      })
+      .filter((row) => row.feeUsd !== null || row.feeJpy !== null);
+
     if (!rows.length) return;
 
-    ctx.waitUntil(writeRows(env, ts, rows));
+    const insertedPromise = writeRows(env, ts, rows).then((count) => {
+      console.log("Inserted rows", count);
+    });
+
+    const retentionDays = clampInt(env.HISTORY_RETENTION_DAYS ?? 7, 1, 90);
+    const cleanupPromise = insertedPromise.then(async () => {
+      const nowTs = Math.floor(Date.now() / 1000);
+      const cutoffTs = nowTs - retentionDays * 86400;
+      const deleteStmt = env.DB.prepare(
+        "DELETE FROM fee_history_points\nWHERE ts < ?1;"
+      ).bind(cutoffTs);
+      const result = await deleteStmt.all();
+      const deleted = Number(result?.results?.[0]?.changes ?? 0);
+      console.log("Cleanup removed rows", deleted);
+    });
+
+    ctx.waitUntil(Promise.all([insertedPromise, cleanupPromise]));
   },
 };

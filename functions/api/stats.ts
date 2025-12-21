@@ -135,6 +135,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     count: row.count,
     firstTs: row.first_ts ?? null,
     lastTs: row.last_ts ?? null,
+    ageSec: row.last_ts != null ? toTs - row.last_ts : null,
     feeUsd: {
       avg: row.avg_fee_usd ?? null,
       min: row.min_fee_usd ?? null,
