@@ -146,7 +146,7 @@ function trimTrailingZeros(str) {
 }
 
 function formatFiat(value, currency) {
-  const currencyCode = typeof currency === "string" ? currency : "USD";
+  const currencyCode = typeof currency === "string" ? currency.toUpperCase() : "USD";
   return formatFeeWithPrecision(value, currencyCode);
 }
 
