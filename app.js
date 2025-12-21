@@ -145,35 +145,9 @@ function trimTrailingZeros(str) {
   return str.includes(".") ? str.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : str;
 }
 
-function formatFiat(value) {
-  if (value == null || Number.isNaN(value)) return "—";
-
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
-
-  if (abs > 0 && abs < 1e-6) {
-    return `${sign}< 0.000001`;
-  }
-
-  if (abs === 0) {
-    return "0.000";
-  }
-
-  if (abs >= 1e-6 && abs < 0.01) {
-    const fixed = trimTrailingZeros(abs.toFixed(6));
-    return `${sign}${fixed}`;
-  }
-
-  if (abs >= 0.01 && abs < 1000) {
-    return `${sign}${abs.toFixed(3)}`;
-  }
-
-  const suffix = abs >= 1_000_000 ? "m" : "k";
-  const divisor = suffix === "m" ? 1_000_000 : 1_000;
-  const base = abs / divisor;
-  const decimals = base >= 10 ? 1 : 2;
-  const compact = trimTrailingZeros(base.toFixed(decimals));
-  return `${sign}${compact}${suffix}`;
+function formatFiat(value, currency) {
+  const currencyCode = typeof currency === "string" ? currency : "USD";
+  return formatFeeWithPrecision(value, currencyCode);
 }
 
 function formatUpdated(iso) {
@@ -194,6 +168,15 @@ function formatAge(ageSec) {
   if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
   if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
   return `${Math.round(ageSec / 86400)} d ago`;
+}
+
+function buildFeeTitle(rawUsd, rawJpy, currencyCode) {
+  const usdPart = Number.isFinite(rawUsd) ? `Exact feeUsd: ${toPlainNumberString(rawUsd)}` : "";
+  if (currencyCode === "JPY") {
+    const jpyPart = Number.isFinite(rawJpy) ? `feeJpy: ${toPlainNumberString(rawJpy)}` : "";
+    return [usdPart, jpyPart].filter(Boolean).join(" | ");
+  }
+  return usdPart;
 }
 
 // ----- Rendering -----
@@ -314,12 +297,9 @@ function renderTable(rows) {
     const currencyCode = currency.toUpperCase();
     const rawFee = chain[currencyKey];
 
-    const displayFee = formatFiat(rawFee);
+    const displayFee = formatFiat(rawFee, currencyCode);
     const displayFeeApprox = displayFee === "—" ? displayFee : `≈ ${displayFee}`;
-    const feeTitle =
-      typeof rawFee === "number" && Number.isFinite(rawFee)
-        ? `${toPlainNumberString(rawFee)} ${currencyCode}`
-        : "";
+    const feeTitle = buildFeeTitle(chain.feeUSD, chain.feeJPY, currencyCode);
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const speedApprox = speedStr === "—" ? speedStr : `≈ ${speedStr}`;
     const statusStr = (chain.status || "unknown").toLowerCase();
