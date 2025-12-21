@@ -23,3 +23,4 @@ wrangler deploy
 
 - The Worker only runs on its scheduled trigger. For local iteration, `wrangler dev --test-scheduled` can be used to execute the scheduled handler manually.
 - No UI or GitHub Actions changes are needed for this Worker.
+- After deployment in Cloudflare, create or select your D1 database, bind it as `DB`, and confirm the 10-minute cron trigger is enabled.
