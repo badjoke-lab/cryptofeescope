@@ -57,7 +57,11 @@ async function fetchSnapshot(url) {
   if (!response.ok) {
     throw new Error(`Snapshot fetch failed with status ${response.status}`);
   }
-  return response.json();
+  try {
+    return await response.json();
+  } catch (err) {
+    throw new Error("Snapshot fetch returned invalid JSON");
+  }
 }
 
 async function writeRows(env, ts, rows) {
