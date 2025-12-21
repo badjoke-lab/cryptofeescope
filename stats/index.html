@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <title>CryptoFeeScope – Stats</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="View recent fee history per chain on CryptoFeeScope." />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand-link" href="/">
+        <div class="brand">
+          <img src="../assets/logo.svg" alt="CryptoFeeScope logo">
+          <div>
+            <div>CryptoFeeScope</div>
+            <div class="sub">Recent fee history</div>
+          </div>
+        </div>
+      </a>
+      <div class="spacer"></div>
+      <div class="toolbar">
+        <button id="themeBtn" class="btn btn-ghost" type="button" aria-label="Toggle theme">🌞</button>
+        <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="bar-line" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+    <nav class="global-nav" id="global-nav">
+      <div class="global-nav-inner">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/stats/">Stats</a></li>
+          <li><a href="/roadmap.html">Roadmap</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/methods/">Methodology</a></li>
+          <li><a href="/donate.html">Donate</a></li>
+          <li><a href="/disclaimer.html">Disclaimer</a></li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="cards stats-grid">
+      <article class="card">
+        <div class="inner">
+          <div class="stats-controls">
+            <label class="control">
+              <span>Chain</span>
+              <select id="chainSelect">
+                <option value="btc">Bitcoin</option>
+                <option value="eth">Ethereum</option>
+                <option value="bsc">BSC</option>
+                <option value="sol">Solana</option>
+                <option value="tron">TRON</option>
+                <option value="avax">Avalanche</option>
+                <option value="xrp">XRP</option>
+                <option value="arbitrum">Arbitrum</option>
+                <option value="optimism">Optimism</option>
+              </select>
+            </label>
+            <div class="control">
+              <span>Range</span>
+              <div class="range-toggle" role="group" aria-label="Range">
+                <button type="button" data-range="24h" class="btn small" id="range24h">24h</button>
+                <button type="button" data-range="7d" class="btn small" id="range7d">7d</button>
+              </div>
+            </div>
+            <div class="control status" id="loadStatus">Loading…</div>
+          </div>
+
+          <div class="summary-grid" id="summaryGrid">
+            <div class="summary-card">
+              <div class="label">Avg fee (USD)</div>
+              <div class="value" id="avgFee">—</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Min fee (USD)</div>
+              <div class="value" id="minFee">—</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Max fee (USD)</div>
+              <div class="value" id="maxFee">—</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Count</div>
+              <div class="value" id="count">—</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Updated</div>
+              <div class="value" id="updated">—</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="inner">
+          <div class="chart-header">
+            <h2 class="card-title">Fee history</h2>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="historyChart" height="260"></canvas>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>feeUsd</th>
+                  <th>speedSec</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable">
+                <tr><td colspan="4">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="5" ry="5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="10" cy="11" r="1.4" />
+          <circle cx="14" cy="11" r="1.4" />
+          <path d="M8 15c1 .9 2.1 1.4 3.9 1.4S15.8 15.9 17 15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <span>CryptoFeeScope</span>
+      </div>
+      <div class="links">
+        <a href="/">Home</a> ·
+        <a href="/stats/">Stats</a> ·
+        <a href="/about.html">About</a> ·
+        <a href="/roadmap.html">Roadmap</a> ·
+        <a href="/methods/">Methodology</a> ·
+        <a href="/donate.html">Donate</a> ·
+        <a href="/disclaimer.html">Disclaimer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./stats.js"></script>
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
+</body>
+</html>
