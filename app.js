@@ -85,6 +85,7 @@ const state = {
   snapshot: null,
   currency: "usd", // "usd" | "jpy"
 };
+let historyMeta = null;
 
 const METHOD_ANCHORS = {
   btc: "btc",
@@ -169,6 +170,15 @@ function formatUpdated(iso) {
   ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
     d.getMinutes()
   ).padStart(2, "0")}`;
+}
+
+function formatAge(ageSec) {
+  if (typeof ageSec !== "number" || !Number.isFinite(ageSec) || ageSec < 0) return "—";
+  if (ageSec < 30) return "just now";
+  if (ageSec < 90) return "1 min ago";
+  if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
+  if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
+  return `${Math.round(ageSec / 86400)} d ago`;
 }
 
 // ----- Rendering -----
@@ -323,6 +333,17 @@ function renderTable() {
   });
 }
 
+function renderFreshness() {
+  const freshnessEl = document.getElementById("history-freshness");
+  if (!freshnessEl) return;
+  if (!historyMeta) {
+    freshnessEl.textContent = "Loading…";
+    return;
+  }
+  const age = typeof historyMeta.ageSecOverall === "number" ? historyMeta.ageSecOverall : null;
+  freshnessEl.textContent = age == null ? "—" : formatAge(age);
+}
+
 // ----- Lifecycle -----
 async function loadSnapshotAndRender() {
   const updatedEl = document.getElementById("updated-label");
@@ -336,11 +357,28 @@ async function loadSnapshotAndRender() {
       updatedEl.textContent = formatUpdated(snapshot.generatedAt);
     }
     renderTable();
+    renderFreshness();
   } catch (err) {
     console.error(err);
     if (updatedEl) {
       updatedEl.textContent = "Error loading data";
     }
+    renderFreshness();
+  }
+}
+
+async function fetchHistoryMeta() {
+  const freshnessEl = document.getElementById("history-freshness");
+  if (freshnessEl) freshnessEl.textContent = "Loading…";
+  try {
+    const res = await fetch("/api/meta");
+    if (!res.ok) throw new Error("Failed to load meta");
+    historyMeta = await res.json();
+    renderFreshness();
+  } catch (err) {
+    console.error(err);
+    historyMeta = null;
+    renderFreshness();
   }
 }
 
@@ -420,5 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindCurrencyButtons();
   bindNavToggle();
   loadSnapshotAndRender();
+  fetchHistoryMeta();
   setInterval(loadSnapshotAndRender, 60_000);
+  setInterval(fetchHistoryMeta, 60_000);
 });

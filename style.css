@@ -89,6 +89,7 @@ header{
   color:var(--muted);
 }
 .updated-label{font-size:13px;font-weight:600;color:var(--fg);margin:6px 0 10px;}
+.freshness-note{font-size:12px;color:var(--muted);margin:0 0 10px;}
 .spacer{flex:1}
 .toolbar{
   display:flex;
@@ -855,6 +856,7 @@ footer .note{
 .summary-card .value{font-size:18px;font-weight:700;}
 .chart-wrap{width:100%;min-height:260px;}
 .chart-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.chart-subtle{font-size:12px;color:var(--muted);}
 .table-wrap{overflow-x:auto;margin-top:12px;}
 
 @media (min-width:900px){

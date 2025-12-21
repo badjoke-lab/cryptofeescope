@@ -10,6 +10,7 @@
     max: document.getElementById('maxFee'),
     count: document.getElementById('count'),
     updated: document.getElementById('updated'),
+    freshness: document.getElementById('historyFreshness'),
     table: document.getElementById('historyTable'),
     chart: document.getElementById('historyChart'),
     status: document.getElementById('loadStatus'),
@@ -20,6 +21,7 @@
     range: DEFAULT_RANGE,
     history: [],
     stats: null,
+    meta: null,
   };
 
   function parseQuery() {
@@ -62,6 +64,15 @@
       return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
     }
     return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+  }
+
+  function formatAge(ageSec) {
+    if (typeof ageSec !== 'number' || !Number.isFinite(ageSec) || ageSec < 0) return '—';
+    if (ageSec < 30) return 'just now';
+    if (ageSec < 90) return '1 min ago';
+    if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
+    if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
+    return `${Math.round(ageSec / 86400)} d ago`;
   }
 
   function renderSummary() {
@@ -156,10 +167,26 @@
     });
   }
 
+  function renderFreshness() {
+    if (!els.freshness) return;
+    if (!state.meta) {
+      els.freshness.textContent = 'Loading…';
+      return;
+    }
+    const latest = state.meta.latestTsByChain?.[state.chain];
+    if (typeof latest !== 'number') {
+      els.freshness.textContent = '—';
+      return;
+    }
+    const age = state.meta.nowTs - latest;
+    els.freshness.textContent = formatAge(age);
+  }
+
   function renderAll() {
     renderSummary();
     renderTable();
     drawLineChart();
+    renderFreshness();
   }
 
   async function fetchStats() {
@@ -182,10 +209,16 @@
       .sort((a,b) => a.ts - b.ts);
   }
 
+  async function fetchMeta() {
+    const res = await fetch('/api/meta');
+    if (!res.ok) throw new Error('Failed to load meta');
+    state.meta = await res.json();
+  }
+
   async function refresh() {
     setStatus('Loading…');
     try {
-      await Promise.all([fetchStats(), fetchHistory()]);
+      await Promise.all([fetchStats(), fetchHistory(), fetchMeta()]);
       renderAll();
       setStatus('');
     } catch (err) {
