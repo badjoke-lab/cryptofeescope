@@ -114,37 +114,6 @@ const METHOD_ANCHORS = {
   xrp: "xrp",
 };
 
-function toPlainNumberString(value) {
-  if (!Number.isFinite(value)) return String(value);
-  const sign = value < 0 ? "-" : "";
-  const absValue = Math.abs(value);
-  const str = String(absValue);
-  if (!/e/i.test(str)) return `${sign}${str}`;
-
-  const [mantissa, exponentPart] = str.split("e");
-  const exponent = parseInt(exponentPart, 10);
-  if (!Number.isFinite(exponent)) return `${sign}${str}`;
-
-  const [integerPart, fractionalPart = ""] = mantissa.split(".");
-  const digits = integerPart + fractionalPart;
-  if (exponent < 0) {
-    const zeros = "0".repeat(Math.max(0, Math.abs(exponent) - 1));
-    return `${sign}0.${zeros}${digits}`.replace(/\.?0+$/, "");
-  }
-
-  const decimalShift = exponent - fractionalPart.length;
-  if (decimalShift >= 0) {
-    return `${sign}${digits}${"0".repeat(decimalShift)}`;
-  }
-
-  const splitIndex = digits.length + decimalShift;
-  return `${sign}${digits.slice(0, splitIndex)}.${digits.slice(splitIndex)}`.replace(/\.?0+$/, "");
-}
-
-function trimTrailingZeros(str) {
-  return str.includes(".") ? str.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : str;
-}
-
 function formatFiat(value, currency) {
   const currencyCode = typeof currency === "string" ? currency.toUpperCase() : "USD";
   return formatFeeWithPrecision(value, currencyCode);
@@ -168,6 +137,40 @@ function formatAge(ageSec) {
   if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
   if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
   return `${Math.round(ageSec / 86400)} d ago`;
+}
+
+function attachRawValueReveal(el) {
+  if (!el || el.dataset.rawBound === "true" || !el.dataset.rawValue) return;
+  const showRaw = () => {
+    const original = el.dataset.displayValue || el.textContent;
+    const raw = el.dataset.rawValue;
+    if (!raw) return;
+    el.textContent = raw;
+    if (el.dataset.rawTimer) {
+      clearTimeout(Number(el.dataset.rawTimer));
+    }
+    const id = setTimeout(() => {
+      el.textContent = original;
+      el.dataset.rawTimer = "";
+    }, 1500);
+    el.dataset.rawTimer = String(id);
+  };
+  el.addEventListener("click", showRaw);
+  el.addEventListener("touchstart", showRaw, { passive: true });
+  el.dataset.rawBound = "true";
+}
+
+function applyFeeDisplay(el, parts, displayText) {
+  if (!el || !parts) return;
+  const text = displayText ?? parts.display;
+  el.textContent = text;
+  if (parts.raw) {
+    el.title = `Exact: ${parts.raw}`;
+    el.setAttribute("aria-label", `${text} (raw ${parts.raw})`);
+    el.dataset.rawValue = parts.raw;
+    el.dataset.displayValue = text;
+    attachRawValueReveal(el);
+  }
 }
 
 function buildFeeTitle(rawUsd, rawJpy, currencyCode) {
@@ -297,7 +300,8 @@ function renderTable(rows) {
     const currencyCode = currency.toUpperCase();
     const rawFee = chain[currencyKey];
 
-    const displayFee = formatFiat(rawFee, currencyCode);
+    const feeParts = formatFeeDisplayParts(rawFee, currencyCode);
+    const displayFee = feeParts.display;
     const displayFeeApprox = displayFee === "—" ? displayFee : `≈ ${displayFee}`;
     const feeTitle = buildFeeTitle(chain.feeUSD, chain.feeJPY, currencyCode);
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
@@ -344,10 +348,11 @@ function renderTable(rows) {
 
       const tdFee = document.createElement("td");
       tdFee.classList.add("col-fee", "fee-cell");
-      tdFee.textContent = displayFeeApprox;
+      applyFeeDisplay(tdFee, feeParts, displayFeeApprox);
       if (feeTitle) {
         tdFee.title = feeTitle;
       }
+      tdFee.dataset.displayValue = displayFeeApprox;
 
       const tdChange = document.createElement("td");
       tdChange.classList.add("col-change", "change-cell", changeClass);
@@ -395,7 +400,7 @@ function renderTable(rows) {
       metricsTop.classList.add("metrics-top");
       const feeValueMobile = document.createElement("span");
       feeValueMobile.classList.add("fee-value-mobile");
-      feeValueMobile.textContent = displayFeeApprox;
+      applyFeeDisplay(feeValueMobile, feeParts, displayFeeApprox);
       if (feeTitle) {
         feeValueMobile.title = feeTitle;
       }
