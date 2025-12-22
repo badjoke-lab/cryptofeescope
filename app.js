@@ -141,17 +141,13 @@ function formatAge(ageSec) {
 
 function applyFeeDisplay(el, parts, displayText) {
   if (!el || !parts) return;
+  if (typeof renderFeeValue === "function") {
+    renderFeeValue(el, parts, displayText);
+    return;
+  }
+
   const text = displayText ?? parts.display;
   el.textContent = text;
-  if (parts.raw) {
-    el.title = `Exact: ${parts.raw}`;
-    el.setAttribute("aria-label", `${text} (raw ${parts.raw})`);
-    el.dataset.rawValue = parts.raw;
-    el.dataset.displayValue = text;
-    if (typeof bindRawValueDisclosure === "function") {
-      bindRawValueDisclosure(el);
-    }
-  }
 }
 
 function buildFeeTitle(rawUsd, rawJpy, currencyCode) {
@@ -279,9 +275,10 @@ function renderTable(rows) {
     const key = chain.key;
     const currencyKey = currency === "usd" ? "feeUSD" : "feeJPY";
     const currencyCode = currency.toUpperCase();
-    const rawFee = chain[currencyKey];
-
-    const feeParts = formatFeeDisplayParts(rawFee, currencyCode);
+    const feeParts = formatFeePair({
+      usd: chain.feeUSD,
+      jpy: chain.feeJPY,
+    }, { currency: currencyCode });
     const displayFee = feeParts.display;
     const displayFeeApprox = displayFee === "—" ? displayFee : `≈ ${displayFee}`;
     const feeTitle = buildFeeTitle(chain.feeUSD, chain.feeJPY, currencyCode);
@@ -382,9 +379,6 @@ function renderTable(rows) {
       const feeValueMobile = document.createElement("span");
       feeValueMobile.classList.add("fee-value-mobile");
       applyFeeDisplay(feeValueMobile, feeParts, displayFeeApprox);
-      if (feeTitle) {
-        feeValueMobile.title = feeTitle;
-      }
       const changeValueMobile = document.createElement("span");
       changeValueMobile.classList.add("change-value-mobile", changeClass);
       changeValueMobile.textContent = changeText;

@@ -57,7 +57,9 @@ function toPlainNumberString(value) {
 
 function formatFeeDisplayParts(value, currency) {
   const num = Number(value);
-  if (!Number.isFinite(num)) return { display: "—", raw: "" };
+  if (!Number.isFinite(num)) {
+    return { display: "—", displayText: "—", exact: "", exactText: "", raw: "" };
+  }
 
   const code = typeof currency === "string" ? currency.toUpperCase() : "USD";
   const symbol = getCurrencySymbol(code);
@@ -65,10 +67,18 @@ function formatFeeDisplayParts(value, currency) {
 
   const thresholdMap = { USD: 0.001, JPY: 0.1 };
   const threshold = thresholdMap[code] || thresholdMap.USD;
+  const exact = toPlainNumberString(num);
+
   if (num > 0 && num < threshold) {
+    const display = `<${symbol}${toPlainNumberString(threshold)}`;
     return {
-      display: `<${symbol}${toPlainNumberString(threshold)}`,
-      raw: `${symbol}${toPlainNumberString(num)}`,
+      display,
+      displayText: display,
+      exact,
+      exactText: exact,
+      raw: `${symbol}${exact}`,
+      symbol,
+      currency: code,
     };
   }
 
@@ -80,10 +90,33 @@ function formatFeeDisplayParts(value, currency) {
   else digits = 2;
 
   const rounded = trimTrailingZeros(num.toFixed(digits));
+  const display = `${symbol}${rounded}`;
   return {
-    display: `${symbol}${rounded}`,
-    raw: `${symbol}${toPlainNumberString(num)}`,
+    display,
+    displayText: display,
+    exact,
+    exactText: exact,
+    raw: `${symbol}${exact}`,
+    symbol,
+    currency: code,
   };
+}
+
+function formatFeeUSD(value, opts) {
+  return formatFeeDisplayParts(value, (opts && opts.currency) || "USD");
+}
+
+function formatFeeJPY(value, opts) {
+  return formatFeeDisplayParts(value, (opts && opts.currency) || "JPY");
+}
+
+function formatFeePair(values, opts) {
+  const currency = (opts && opts.currency) || (opts && opts.currencyCode) || "USD";
+  const code = typeof currency === "string" ? currency.toUpperCase() : "USD";
+  if (code === "JPY") {
+    return formatFeeJPY(values && values.jpy != null ? values.jpy : values?.feeJPY, { currency: "JPY" });
+  }
+  return formatFeeUSD(values && values.usd != null ? values.usd : values?.feeUSD, { currency: "USD" });
 }
 
 /**
@@ -219,4 +252,63 @@ function bindRawValueDisclosure(el) {
 function bindRawValueDisclosureAll(scope) {
   if (!scope || typeof scope.querySelectorAll !== "function") return;
   scope.querySelectorAll("[data-raw-value]").forEach(bindRawValueDisclosure);
+}
+
+function renderFeeValue(el, parts, displayText) {
+  if (!el || !parts) return;
+  const text = displayText ?? parts.display ?? parts.displayText ?? "—";
+  const exact = parts.exact ?? parts.exactText ?? "";
+  const exactLabel = parts.raw || (parts.symbol ? `${parts.symbol}${exact}` : exact);
+
+  el.textContent = "";
+  const valueEl = document.createElement("span");
+  valueEl.className = "fee-val";
+  valueEl.textContent = text;
+
+  if (exact) {
+    valueEl.title = `Exact: ${exactLabel}`;
+    valueEl.setAttribute("role", "button");
+    valueEl.setAttribute("tabindex", "0");
+    valueEl.setAttribute("aria-expanded", "false");
+    valueEl.dataset.exactValue = exactLabel;
+  }
+
+  el.appendChild(valueEl);
+
+  if (!exact) return;
+
+  const inline = document.createElement("div");
+  inline.className = "fee-exact";
+  inline.textContent = `Exact: ${exactLabel}`;
+  inline.hidden = true;
+  el.appendChild(inline);
+
+  const toggle = () => {
+    const willShow = inline.hidden;
+    inline.hidden = !willShow;
+    inline.classList.toggle("visible", willShow);
+    valueEl.setAttribute("aria-expanded", willShow ? "true" : "false");
+  };
+
+  const handleKey = (evt) => {
+    if (evt.key === "Enter" || evt.key === " ") {
+      evt.preventDefault();
+      toggle();
+    }
+  };
+
+  valueEl.addEventListener("click", toggle);
+  valueEl.addEventListener("touchstart", toggle, { passive: true });
+  valueEl.addEventListener("keydown", handleKey);
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    formatFeeUSD,
+    formatFeeJPY,
+    formatFeePair,
+    formatFeeDisplayParts,
+    trimTrailingZeros,
+    renderFeeValue,
+  };
 }
