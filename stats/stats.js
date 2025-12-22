@@ -52,14 +52,30 @@
     els.status.textContent = msg;
   }
 
-  function formatUsd(value) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return '—';
-    const abs = Math.abs(num);
-    let digits = 2;
-    if (abs < 0.1) digits = 6;
-    else if (abs < 1) digits = 4;
-    return `$${num.toFixed(digits)}`;
+  function escapeAttr(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+
+  function formatFeeParts(value) {
+    return typeof formatFeeDisplayParts === 'function'
+      ? formatFeeDisplayParts(value, 'USD')
+      : { display: '—', raw: '' };
+  }
+
+  function applyFeeText(el, value) {
+    if (!el) return;
+    const parts = formatFeeParts(value);
+    el.textContent = parts.display;
+    if (parts.raw) {
+      el.title = `Exact: ${parts.raw}`;
+      el.dataset.rawValue = parts.raw;
+      el.dataset.displayValue = parts.display;
+      bindRawReveal(el);
+    } else {
+      el.removeAttribute('title');
+      delete el.dataset.rawValue;
+      delete el.dataset.displayValue;
+    }
   }
 
   function formatTime(ts, range) {
@@ -97,7 +113,9 @@
 
   function showTooltip(pt) {
     if (!chartUI.tooltip) return;
-    chartUI.tooltip.innerHTML = `<div class="tooltip-time">${formatTime(pt.ts, state.range)}</div><div class="tooltip-value">${formatUsd(pt.feeUsd)}</div>`;
+    const parts = formatFeeParts(pt.feeUsd);
+    const rawLine = parts.raw ? `<div class="tooltip-raw">Raw: ${parts.raw}</div>` : '';
+    chartUI.tooltip.innerHTML = `<div class="tooltip-time">${formatTime(pt.ts, state.range)}</div><div class="tooltip-value">${parts.display}</div>${rawLine}`;
     chartUI.tooltip.style.left = `${pt.x}px`;
     chartUI.tooltip.style.top = `${pt.y}px`;
     chartUI.tooltip.classList.remove('hidden');
@@ -142,11 +160,37 @@
 
   function renderSummary() {
     const s = state.stats;
-    els.avg.textContent = formatUsd(s?.feeUsd?.avg);
-    els.min.textContent = formatUsd(s?.feeUsd?.min);
-    els.max.textContent = formatUsd(s?.feeUsd?.max);
+    applyFeeText(els.avg, s?.feeUsd?.avg);
+    applyFeeText(els.min, s?.feeUsd?.min);
+    applyFeeText(els.max, s?.feeUsd?.max);
     els.count.textContent = s?.count ?? '—';
     els.updated.textContent = s?.lastTs ? new Date(s.lastTs * 1000).toLocaleString() : '—';
+  }
+
+  function bindRawReveal(el) {
+    if (!el || !el.dataset.rawValue || el.dataset.rawBound === 'true') return;
+    const showRaw = () => {
+      const original = el.dataset.displayValue || el.textContent;
+      const raw = el.dataset.rawValue;
+      if (!raw) return;
+      el.textContent = raw;
+      if (el.dataset.rawTimer) {
+        clearTimeout(Number(el.dataset.rawTimer));
+      }
+      const id = setTimeout(() => {
+        el.textContent = original;
+        el.dataset.rawTimer = '';
+      }, 1500);
+      el.dataset.rawTimer = String(id);
+    };
+    el.addEventListener('click', showRaw);
+    el.addEventListener('touchstart', showRaw, { passive: true });
+    el.dataset.rawBound = 'true';
+  }
+
+  function bindRawRevealAll(scope) {
+    if (!scope) return;
+    scope.querySelectorAll('[data-raw-value]').forEach(bindRawReveal);
   }
 
   function renderTable() {
@@ -157,12 +201,15 @@
       return;
     }
     els.table.innerHTML = rows.map(pt => {
-      const fee = pt.feeUsd == null ? '—' : formatUsd(pt.feeUsd);
+      const feeParts = formatFeeParts(pt.feeUsd);
+      const rawAttr = feeParts.raw ? ` title="Exact: ${escapeAttr(feeParts.raw)}" data-raw-value="${escapeAttr(feeParts.raw)}" data-display-value="${escapeAttr(feeParts.display)}"` : '';
+      const fee = feeParts.display;
       const speed = pt.speedSec == null ? '—' : pt.speedSec;
       const status = pt.status || '—';
       const time = formatTime(pt.ts, state.range);
-      return `<tr><td>${time}</td><td>${fee}</td><td>${speed}</td><td>${status}</td></tr>`;
+      return `<tr><td>${time}</td><td class="fee-cell"${rawAttr}>${fee}</td><td>${speed}</td><td>${status}</td></tr>`;
     }).join('');
+    bindRawRevealAll(els.table);
   }
 
   function drawLineChart() {

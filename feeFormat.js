@@ -16,6 +16,10 @@ function getCurrencySymbol(currency) {
   }
 }
 
+function trimTrailingZeros(str) {
+  return str.includes(".") ? str.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : str;
+}
+
 // Number → 科学表記なしの素の10進文字列
 function toPlainString(num) {
   if (!isFinite(num)) return String(num);
@@ -45,6 +49,32 @@ function toPlainString(num) {
   var decPart = digits.slice(newPos).replace(/0+$/, "");
   var result = decPart.length ? intPart + "." + decPart : intPart;
   return isNeg ? "-" + result : result;
+}
+
+function toPlainNumberString(value) {
+  return toPlainString(Number(value));
+}
+
+function formatFeeDisplayParts(value, currency) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return { display: "—", raw: "" };
+
+  const code = typeof currency === "string" ? currency.toUpperCase() : "USD";
+  const symbol = getCurrencySymbol(code);
+  const abs = Math.abs(num);
+
+  let digits;
+  if (abs < 0.00001) digits = 6;
+  else if (abs < 0.01) digits = 5;
+  else if (abs < 0.1) digits = 4;
+  else if (abs < 1) digits = 3;
+  else digits = 2;
+
+  const rounded = trimTrailingZeros(num.toFixed(digits));
+  return {
+    display: `${symbol}${rounded}`,
+    raw: `${symbol}${toPlainNumberString(num)}`,
+  };
 }
 
 /**
@@ -79,25 +109,15 @@ function formatFeeDisplay(feeUSD, currency, fxRate) {
 
 /**
  * Shared home/stats formatter for displaying fees with consistent precision.
- * - USD: < 0.1 -> 6 decimals, < 1 -> 4 decimals, otherwise 2 decimals
- * - JPY: < 10 -> 2 decimals, otherwise 0 decimals
+ * - < 0.00001 -> 6 decimals
+ * - < 0.01 -> 5 decimals
+ * - < 0.1 -> 4 decimals
+ * - < 1 -> 3 decimals
+ * - otherwise 2 decimals
  * - returns "—" for null/NaN
  */
 function formatFeeWithPrecision(value, currency) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "—";
-
-  const symbol = getCurrencySymbol(currency);
-  const abs = Math.abs(num);
-  let digits;
-
-  if (currency === "JPY") {
-    digits = abs < 10 ? 2 : 0;
-  } else {
-    digits = abs < 0.1 ? 6 : abs < 1 ? 4 : 2;
-  }
-
-  return `${symbol}${num.toFixed(digits)}`;
+  return formatFeeDisplayParts(value, currency).display;
 }
 
 /**
