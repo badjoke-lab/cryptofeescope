@@ -63,6 +63,15 @@ function formatFeeDisplayParts(value, currency) {
   const symbol = getCurrencySymbol(code);
   const abs = Math.abs(num);
 
+  const thresholdMap = { USD: 0.001, JPY: 0.1 };
+  const threshold = thresholdMap[code] || thresholdMap.USD;
+  if (num > 0 && num < threshold) {
+    return {
+      display: `<${symbol}${toPlainNumberString(threshold)}`,
+      raw: `${symbol}${toPlainNumberString(num)}`,
+    };
+  }
+
   let digits;
   if (abs < 0.00001) digits = 6;
   else if (abs < 0.01) digits = 5;
@@ -155,4 +164,59 @@ function buildFeeTooltipInfo(feeUSD, currency, fxRate) {
     exactLabel: exactLabel,
     zeroCountLabel: zeroCountLabel,
   };
+}
+
+function prefersInlineRaw() {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+  return window.innerWidth <= 640;
+}
+
+function ensureInlineRawContainer(el) {
+  if (!el) return null;
+  const parent = el.closest && el.closest(".fee-cell, .cell-mobile-right, .metrics-top") || el.parentElement;
+  if (!parent) return null;
+  let inline = parent.querySelector && parent.querySelector(".fee-inline-raw");
+  if (!inline) {
+    inline = document.createElement("div");
+    inline.className = "fee-inline-raw";
+    parent.appendChild(inline);
+  }
+  return inline;
+}
+
+function bindRawValueDisclosure(el) {
+  if (!el || el.dataset.rawBound === "true" || !el.dataset.rawValue) return;
+  const handler = () => {
+    const raw = el.dataset.rawValue;
+    if (!raw) return;
+
+    if (prefersInlineRaw()) {
+      const inline = ensureInlineRawContainer(el);
+      if (inline) {
+        inline.textContent = `Exact: ${raw}`;
+        inline.classList.add("visible");
+      }
+      return;
+    }
+
+    const original = el.dataset.displayValue || el.textContent;
+    el.textContent = raw;
+    if (el.dataset.rawTimer) {
+      clearTimeout(Number(el.dataset.rawTimer));
+    }
+    const id = setTimeout(() => {
+      el.textContent = original;
+      el.dataset.rawTimer = "";
+    }, 1500);
+    el.dataset.rawTimer = String(id);
+  };
+  el.addEventListener("click", handler);
+  el.addEventListener("touchstart", handler, { passive: true });
+  el.dataset.rawBound = "true";
+}
+
+function bindRawValueDisclosureAll(scope) {
+  if (!scope || typeof scope.querySelectorAll !== "function") return;
+  scope.querySelectorAll("[data-raw-value]").forEach(bindRawValueDisclosure);
 }
