@@ -88,73 +88,97 @@ export const onRequestOptions: PagesFunction = () => {
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const url = new URL(request.url);
-  const chainParam = url.searchParams.get("chain");
-  const rangeParam = url.searchParams.get("range");
+  try {
+    const url = new URL(request.url);
+    const chainParam = url.searchParams.get("chain");
+    const rangeParam = url.searchParams.get("range");
 
-  const range = parseRange(rangeParam);
-  if (!range) {
-    return jsonResponse({ error: "Invalid range parameter." }, 400);
+    const range = parseRange(rangeParam);
+    if (!range) {
+      return jsonResponse({ ok: false, error: "Invalid range parameter." }, 400);
+    }
+
+    if (chainParam && !CHAINS.has(chainParam)) {
+      return jsonResponse({ ok: false, error: "Invalid chain parameter." }, 400);
+    }
+
+    const toTs = Math.floor(Date.now() / 1000);
+    const fromTs = toTs - range.seconds;
+
+    let query = `SELECT
+      chain,
+      COUNT(*) AS count,
+      MIN(ts) AS first_ts,
+      MAX(ts) AS last_ts,
+      AVG(fee_usd) AS avg_fee_usd,
+      MIN(fee_usd) AS min_fee_usd,
+      MAX(fee_usd) AS max_fee_usd,
+      AVG(speed_sec) AS avg_speed_sec,
+      MIN(speed_sec) AS min_speed_sec,
+      MAX(speed_sec) AS max_speed_sec
+    FROM fee_history_points
+    WHERE ts >= ?1 AND ts <= ?2`;
+
+    const params: Array<string | number> = [fromTs, toTs];
+
+    if (chainParam) {
+      query += " AND chain = ?3";
+      params.push(chainParam);
+    }
+
+    query += "\n    GROUP BY chain\n    ORDER BY chain ASC;";
+
+    const statement = env.DB.prepare(query).bind(...params);
+    const { results } = await statement.all<StatsRow>();
+
+    const chains = (results || []).map((row) => ({
+      chain: row.chain,
+      count: row.count,
+      firstTs: row.first_ts ?? null,
+      lastTs: row.last_ts ?? null,
+      ageSec: row.last_ts != null ? toTs - row.last_ts : null,
+      feeUsd: {
+        avg: row.avg_fee_usd ?? null,
+        min: row.min_fee_usd ?? null,
+        max: row.max_fee_usd ?? null,
+      },
+      speedSec: {
+        avg: row.avg_speed_sec ?? null,
+        min: row.min_speed_sec ?? null,
+        max: row.max_speed_sec ?? null,
+      },
+    }));
+
+    const latestTsOverall = chains.reduce<number | null>((acc, c) => {
+      if (c.lastTs == null) return acc;
+      if (acc == null || c.lastTs > acc) return c.lastTs;
+      return acc;
+    }, null);
+
+    const body = {
+      ok: true,
+      data: {
+        range: range.label,
+        fromTs,
+        toTs,
+        chains,
+      },
+      meta: {
+        newestTs: latestTsOverall,
+        fromTs,
+        toTs,
+      },
+    };
+
+    return jsonResponse(body, 200, true);
+  } catch (err) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : "Unknown error",
+      },
+      500
+    );
   }
-
-  if (chainParam && !CHAINS.has(chainParam)) {
-    return jsonResponse({ error: "Invalid chain parameter." }, 400);
-  }
-
-  const toTs = Math.floor(Date.now() / 1000);
-  const fromTs = toTs - range.seconds;
-
-  let query = `SELECT
-    chain,
-    COUNT(*) AS count,
-    MIN(ts) AS first_ts,
-    MAX(ts) AS last_ts,
-    AVG(fee_usd) AS avg_fee_usd,
-    MIN(fee_usd) AS min_fee_usd,
-    MAX(fee_usd) AS max_fee_usd,
-    AVG(speed_sec) AS avg_speed_sec,
-    MIN(speed_sec) AS min_speed_sec,
-    MAX(speed_sec) AS max_speed_sec
-  FROM fee_history_points
-  WHERE ts >= ?1 AND ts <= ?2`;
-
-  const params: Array<string | number> = [fromTs, toTs];
-
-  if (chainParam) {
-    query += " AND chain = ?3";
-    params.push(chainParam);
-  }
-
-  query += "\n  GROUP BY chain\n  ORDER BY chain ASC;";
-
-  const statement = env.DB.prepare(query).bind(...params);
-  const { results } = await statement.all<StatsRow>();
-
-  const chains = (results || []).map((row) => ({
-    chain: row.chain,
-    count: row.count,
-    firstTs: row.first_ts ?? null,
-    lastTs: row.last_ts ?? null,
-    ageSec: row.last_ts != null ? toTs - row.last_ts : null,
-    feeUsd: {
-      avg: row.avg_fee_usd ?? null,
-      min: row.min_fee_usd ?? null,
-      max: row.max_fee_usd ?? null,
-    },
-    speedSec: {
-      avg: row.avg_speed_sec ?? null,
-      min: row.min_speed_sec ?? null,
-      max: row.max_speed_sec ?? null,
-    },
-  }));
-
-  const body = {
-    range: range.label,
-    fromTs,
-    toTs,
-    chains,
-  };
-
-  return jsonResponse(body, 200, true);
 };
 
