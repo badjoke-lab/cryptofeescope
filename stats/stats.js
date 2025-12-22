@@ -22,6 +22,8 @@
     history: [],
     stats: null,
     meta: null,
+    metaHistory: null,
+    error: null,
   };
 
   const chartUI = {
@@ -47,9 +49,10 @@
     });
   }
 
-  function setStatus(msg) {
+  function setStatus(msg, isError = false) {
     if (!els.status) return;
     els.status.textContent = msg;
+    els.status.classList.toggle('error', Boolean(isError));
   }
 
   function escapeAttr(str) {
@@ -197,7 +200,9 @@
     if (!els.table) return;
     const rows = state.history.slice(-20).reverse();
     if (!rows.length) {
-      els.table.innerHTML = '<tr><td colspan="4">No data</td></tr>';
+      const suffix = lastWrittenText();
+      const message = suffix ? `No data yet. ${suffix}` : 'No data yet';
+      els.table.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
       return;
     }
     els.table.innerHTML = rows.map(pt => {
@@ -306,20 +311,33 @@
     renderFreshness();
   }
 
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new Error(`Invalid response from ${url}`);
+    }
+    if (!data?.ok) {
+      throw new Error(data?.error || `Request failed (${res.status})`);
+    }
+    return data;
+  }
+
   async function fetchStats() {
     const url = `/api/stats?range=${state.range}&chain=${state.chain}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to load stats');
-    const data = await res.json();
+    const payload = await fetchJson(url);
+    const data = payload?.data;
     const match = Array.isArray(data?.chains) ? data.chains.find(c => c.chain === state.chain) : null;
     state.stats = match || null;
   }
 
   async function fetchHistory() {
     const url = `/api/history?range=${state.range}&chain=${state.chain}&limit=2000`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to load history');
-    const data = await res.json();
+    const payload = await fetchJson(url);
+    const data = payload?.data;
+    state.metaHistory = payload?.meta || null;
     const pts = Array.isArray(data?.points) ? data.points : [];
     state.history = pts
       .map(p => ({
@@ -332,25 +350,45 @@
   }
 
   async function fetchMeta() {
-    const res = await fetch('/api/meta');
-    if (!res.ok) throw new Error('Failed to load meta');
-    state.meta = await res.json();
+    const payload = await fetchJson('/api/meta');
+    state.meta = payload?.data || null;
+  }
+
+  function lastWrittenText() {
+    const ts = state.metaHistory?.newestTs || state.meta?.lastWrittenAt || state.meta?.latestTsOverall;
+    if (!ts) return '';
+    return `Last written at ${new Date(ts * 1000).toLocaleString()}`;
   }
 
   async function refresh() {
     setStatus('Loading…');
+    state.error = null;
     try {
       await Promise.all([fetchStats(), fetchHistory(), fetchMeta()]);
       renderAll();
-      setStatus('');
+      if (!state.history.length) {
+        const suffix = lastWrittenText();
+        setStatus(suffix ? `No data yet. ${suffix}` : 'No data yet');
+      } else {
+        setStatus('');
+      }
     } catch (err) {
       console.error(err);
-      setStatus('Failed to load history');
+      state.error = err instanceof Error ? err.message : 'Failed to load history';
       renderAll();
+      const suffix = lastWrittenText();
+      setStatus(`${state.error}${suffix ? ` (${suffix})` : ''}`, true);
     }
   }
 
   function handleControlEvents() {
+    const retryBtn = document.getElementById('retryBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        refresh();
+      });
+    }
+
     if (els.chain) {
       els.chain.addEventListener('change', (e) => {
         const val = e.target.value;
