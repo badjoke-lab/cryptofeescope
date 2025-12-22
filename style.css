@@ -368,6 +368,12 @@ tbody tr:hover{
   font-size:11px;
   line-height:1.3;
 }
+.fee-inline-raw{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.4;
+}
 .status-cell{
   text-transform:capitalize;
   font-weight:600;

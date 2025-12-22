@@ -73,7 +73,9 @@
       el.title = `Exact: ${parts.raw}`;
       el.dataset.rawValue = parts.raw;
       el.dataset.displayValue = parts.display;
-      bindRawReveal(el);
+      if (typeof bindRawValueDisclosure === 'function') {
+        bindRawValueDisclosure(el);
+      }
     } else {
       el.removeAttribute('title');
       delete el.dataset.rawValue;
@@ -170,32 +172,6 @@
     els.updated.textContent = s?.lastTs ? new Date(s.lastTs * 1000).toLocaleString() : '—';
   }
 
-  function bindRawReveal(el) {
-    if (!el || !el.dataset.rawValue || el.dataset.rawBound === 'true') return;
-    const showRaw = () => {
-      const original = el.dataset.displayValue || el.textContent;
-      const raw = el.dataset.rawValue;
-      if (!raw) return;
-      el.textContent = raw;
-      if (el.dataset.rawTimer) {
-        clearTimeout(Number(el.dataset.rawTimer));
-      }
-      const id = setTimeout(() => {
-        el.textContent = original;
-        el.dataset.rawTimer = '';
-      }, 1500);
-      el.dataset.rawTimer = String(id);
-    };
-    el.addEventListener('click', showRaw);
-    el.addEventListener('touchstart', showRaw, { passive: true });
-    el.dataset.rawBound = 'true';
-  }
-
-  function bindRawRevealAll(scope) {
-    if (!scope) return;
-    scope.querySelectorAll('[data-raw-value]').forEach(bindRawReveal);
-  }
-
   function renderTable() {
     if (!els.table) return;
     const rows = state.history.slice(-20).reverse();
@@ -214,7 +190,9 @@
       const time = formatTime(pt.ts, state.range);
       return `<tr><td>${time}</td><td class="fee-cell"${rawAttr}>${fee}</td><td>${speed}</td><td>${status}</td></tr>`;
     }).join('');
-    bindRawRevealAll(els.table);
+    if (typeof bindRawValueDisclosureAll === 'function') {
+      bindRawValueDisclosureAll(els.table);
+    }
   }
 
   function drawLineChart() {

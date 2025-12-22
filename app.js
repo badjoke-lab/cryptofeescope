@@ -139,27 +139,6 @@ function formatAge(ageSec) {
   return `${Math.round(ageSec / 86400)} d ago`;
 }
 
-function attachRawValueReveal(el) {
-  if (!el || el.dataset.rawBound === "true" || !el.dataset.rawValue) return;
-  const showRaw = () => {
-    const original = el.dataset.displayValue || el.textContent;
-    const raw = el.dataset.rawValue;
-    if (!raw) return;
-    el.textContent = raw;
-    if (el.dataset.rawTimer) {
-      clearTimeout(Number(el.dataset.rawTimer));
-    }
-    const id = setTimeout(() => {
-      el.textContent = original;
-      el.dataset.rawTimer = "";
-    }, 1500);
-    el.dataset.rawTimer = String(id);
-  };
-  el.addEventListener("click", showRaw);
-  el.addEventListener("touchstart", showRaw, { passive: true });
-  el.dataset.rawBound = "true";
-}
-
 function applyFeeDisplay(el, parts, displayText) {
   if (!el || !parts) return;
   const text = displayText ?? parts.display;
@@ -169,7 +148,9 @@ function applyFeeDisplay(el, parts, displayText) {
     el.setAttribute("aria-label", `${text} (raw ${parts.raw})`);
     el.dataset.rawValue = parts.raw;
     el.dataset.displayValue = text;
-    attachRawValueReveal(el);
+    if (typeof bindRawValueDisclosure === "function") {
+      bindRawValueDisclosure(el);
+    }
   }
 }
 
