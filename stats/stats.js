@@ -34,10 +34,13 @@
   };
 
   const CHART_LIMITS = {
-    max: 400,
+    max: 300,
     ideal: 300,
   };
-  const CHART_BUCKETS = [1800, 2400, 3600];
+  const LOAD_TIMEOUT_MS = 10000;
+  const DEFAULT_EMPTY_HINT = 'Wait for next cron write';
+
+  let refreshToken = 0;
 
   function parseQuery() {
     const params = new URLSearchParams(location.search);
@@ -98,51 +101,50 @@
     return `${Math.round(ageSec / 86400)} d ago`;
   }
 
-  function pickBucketSize(spanSec) {
-    for (const bucket of CHART_BUCKETS) {
-      if (Math.ceil(spanSec / bucket) <= CHART_LIMITS.max) return bucket;
-    }
-    return CHART_BUCKETS[CHART_BUCKETS.length - 1];
-  }
-
   function downsampleHistory(points) {
     if (state.range !== '7d' || points.length <= CHART_LIMITS.max) return points.slice();
     const first = points[0];
     const last = points[points.length - 1];
     const spanSec = Math.max(1, last.ts - first.ts);
-    const bucketSize = pickBucketSize(spanSec);
+    const targetBuckets = Math.max(1, CHART_LIMITS.ideal - 2);
+    const bucketSize = Math.max(1, Math.ceil(spanSec / targetBuckets));
 
-    const aggregated = [];
+    const extremes = [];
     let bucketStart = Math.floor(first.ts / bucketSize) * bucketSize;
     let idx = 0;
     while (bucketStart <= last.ts && idx < points.length) {
       const bucketEnd = bucketStart + bucketSize;
-      const bucketPts = [];
+      let minPt = null;
+      let maxPt = null;
       while (idx < points.length && points[idx].ts < bucketEnd) {
-        bucketPts.push(points[idx]);
+        const pt = points[idx];
+        if (!minPt || pt.feeUsd < minPt.feeUsd) minPt = pt;
+        if (!maxPt || pt.feeUsd > maxPt.feeUsd) maxPt = pt;
         idx += 1;
       }
-      if (bucketPts.length) {
-        const feeAvg = bucketPts.reduce((sum, p) => sum + p.feeUsd, 0) / bucketPts.length;
-        const middle = bucketPts[Math.floor(bucketPts.length / 2)];
-        aggregated.push({
-          ts: middle.ts,
-          feeUsd: feeAvg,
-          speedSec: middle.speedSec,
-          status: middle.status,
-        });
-      }
+      if (minPt) extremes.push(minPt);
+      if (maxPt && maxPt !== minPt) extremes.push(maxPt);
       bucketStart = bucketEnd;
     }
 
-    if (!aggregated.length) return points.slice();
-    if (aggregated[0].ts !== first.ts) aggregated.unshift({ ...first });
-    const lastAgg = aggregated[aggregated.length - 1];
-    if (lastAgg.ts !== last.ts) aggregated.push({ ...last });
-    while (aggregated.length > CHART_LIMITS.max + 2) {
-      aggregated.splice(1, 1);
+    const merged = [first, ...extremes, last]
+      .filter(Boolean)
+      .sort((a, b) => a.ts - b.ts);
+
+    const deduped = [];
+    const seen = new Set();
+    merged.forEach(pt => {
+      const key = `${pt.ts}-${pt.feeUsd}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(pt);
+    });
+
+    while (deduped.length > CHART_LIMITS.max) {
+      deduped.splice(Math.floor(deduped.length / 2), 1);
     }
-    return aggregated;
+
+    return deduped;
   }
 
   function setRetryVisible(show) {
@@ -226,7 +228,7 @@
     if (!els.table) return;
     const rows = state.historyRaw.slice(-20).reverse();
     if (!rows.length) {
-      const suffix = lastWrittenText();
+      const suffix = lastWrittenText() || DEFAULT_EMPTY_HINT;
       const message = suffix ? `No data yet. ${suffix}` : 'No data yet';
       els.table.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
       return;
@@ -411,15 +413,29 @@
   }
 
   async function refresh() {
+    const token = ++refreshToken;
     setStatus('Loading…');
     setRetryVisible(false);
     state.error = null;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      if (refreshToken !== token) return;
+      timedOut = true;
+      setStatus('Failed to load (timeout)', true);
+      setRetryVisible(true);
+    }, LOAD_TIMEOUT_MS);
+    let aborted = false;
     try {
       await Promise.all([fetchStats(), fetchHistory(), fetchMeta()]);
+      if (refreshToken !== token) {
+        aborted = true;
+        return;
+      }
       renderAll();
       const suffix = lastWrittenText();
       if (!state.historyRaw.length) {
-        setStatus(suffix ? `No data yet. ${suffix}` : 'No data yet');
+        const hint = suffix || DEFAULT_EMPTY_HINT;
+        setStatus(hint ? `No data yet. ${hint}` : 'No data yet');
       } else if (isPartialHistory()) {
         setStatus(suffix ? `Data partial. ${suffix}` : 'Data partial');
       } else {
@@ -428,11 +444,21 @@
     } catch (err) {
       console.error(err);
       state.error = err instanceof Error ? err.message : 'Failed to load history';
+      if (refreshToken !== token) {
+        aborted = true;
+        return;
+      }
       renderAll();
       const suffix = lastWrittenText();
-      setStatus(`${state.error}${suffix ? ` (${suffix})` : ''}`, true);
+      const hint = suffix || DEFAULT_EMPTY_HINT;
+      const label = 'Failed to load';
+      const extra = state.error && state.error !== label ? `: ${state.error}` : '';
+      setStatus(`${label}${extra}${hint ? ` (${hint})` : ''}`, true);
       setRetryVisible(true);
+    } finally {
+      clearTimeout(timeoutId);
     }
+    if (timedOut || aborted) return;
   }
 
   function handleControlEvents() {
@@ -446,11 +472,7 @@
       els.chain.addEventListener('change', (e) => {
         const val = e.target.value;
         state.chain = CHAINS.includes(val) ? val : DEFAULT_CHAIN;
-        const params = new URLSearchParams(location.search);
-        params.set('chain', state.chain);
-        params.set('range', state.range);
-        const url = `${location.pathname}?${params.toString()}`;
-        history.replaceState(null, '', url);
+        syncUrlState();
         syncControls();
         refresh();
       });
@@ -461,15 +483,20 @@
         const val = btn.dataset.range;
         if (val && (val === '24h' || val === '7d')) {
           state.range = val;
-          const params = new URLSearchParams(location.search);
-          params.set('chain', state.chain);
-          params.set('range', state.range);
-          history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+          syncUrlState();
           syncControls();
           refresh();
         }
       });
     });
+  }
+
+  function syncUrlState() {
+    const params = new URLSearchParams(location.search);
+    params.set('chain', state.chain);
+    params.set('range', state.range);
+    const next = `${location.pathname}?${params.toString()}`;
+    history.replaceState(null, '', next);
   }
 
   function setupThemeAndNav() {
@@ -518,6 +545,7 @@
   }
 
   parseQuery();
+  syncUrlState();
   syncControls();
   handleControlEvents();
   setupThemeAndNav();
