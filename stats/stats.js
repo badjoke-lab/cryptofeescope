@@ -55,32 +55,21 @@
     els.status.classList.toggle('error', Boolean(isError));
   }
 
-  function escapeAttr(str) {
-    return String(str).replace(/"/g, '&quot;');
-  }
-
   function formatFeeParts(value) {
-    return typeof formatFeeDisplayParts === 'function'
-      ? formatFeeDisplayParts(value, 'USD')
-      : { display: '—', raw: '' };
+    return typeof formatFeeUSD === 'function'
+      ? formatFeeUSD(value)
+      : { display: '—', exact: '' };
   }
 
   function applyFeeText(el, value) {
     if (!el) return;
     const parts = formatFeeParts(value);
-    el.textContent = parts.display;
-    if (parts.raw) {
-      el.title = `Exact: ${parts.raw}`;
-      el.dataset.rawValue = parts.raw;
-      el.dataset.displayValue = parts.display;
-      if (typeof bindRawValueDisclosure === 'function') {
-        bindRawValueDisclosure(el);
-      }
-    } else {
-      el.removeAttribute('title');
-      delete el.dataset.rawValue;
-      delete el.dataset.displayValue;
+    if (typeof renderFeeValue === 'function') {
+      renderFeeValue(el, parts);
+      return;
     }
+
+    el.textContent = parts.display;
   }
 
   function formatTime(ts, range) {
@@ -119,7 +108,8 @@
   function showTooltip(pt) {
     if (!chartUI.tooltip) return;
     const parts = formatFeeParts(pt.feeUsd);
-    const rawLine = parts.raw ? `<div class="tooltip-raw">Raw: ${parts.raw}</div>` : '';
+    const rawText = parts.raw || parts.exact;
+    const rawLine = rawText ? `<div class="tooltip-raw">Exact: ${rawText}</div>` : '';
     chartUI.tooltip.innerHTML = `<div class="tooltip-time">${formatTime(pt.ts, state.range)}</div><div class="tooltip-value">${parts.display}</div>${rawLine}`;
     chartUI.tooltip.style.left = `${pt.x}px`;
     chartUI.tooltip.style.top = `${pt.y}px`;
@@ -181,18 +171,31 @@
       els.table.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
       return;
     }
-    els.table.innerHTML = rows.map(pt => {
+    els.table.textContent = '';
+
+    rows.forEach(pt => {
+      const tr = document.createElement('tr');
+      const tdTime = document.createElement('td');
+      tdTime.textContent = formatTime(pt.ts, state.range);
+
+      const tdFee = document.createElement('td');
+      tdFee.className = 'fee-cell';
       const feeParts = formatFeeParts(pt.feeUsd);
-      const rawAttr = feeParts.raw ? ` title="Exact: ${escapeAttr(feeParts.raw)}" data-raw-value="${escapeAttr(feeParts.raw)}" data-display-value="${escapeAttr(feeParts.display)}"` : '';
-      const fee = feeParts.display;
-      const speed = pt.speedSec == null ? '—' : pt.speedSec;
-      const status = pt.status || '—';
-      const time = formatTime(pt.ts, state.range);
-      return `<tr><td>${time}</td><td class="fee-cell"${rawAttr}>${fee}</td><td>${speed}</td><td>${status}</td></tr>`;
-    }).join('');
-    if (typeof bindRawValueDisclosureAll === 'function') {
-      bindRawValueDisclosureAll(els.table);
-    }
+      if (typeof renderFeeValue === 'function') {
+        renderFeeValue(tdFee, feeParts);
+      } else {
+        tdFee.textContent = feeParts.display;
+      }
+
+      const tdSpeed = document.createElement('td');
+      tdSpeed.textContent = pt.speedSec == null ? '—' : pt.speedSec;
+
+      const tdStatus = document.createElement('td');
+      tdStatus.textContent = pt.status || '—';
+
+      tr.append(tdTime, tdFee, tdSpeed, tdStatus);
+      els.table.appendChild(tr);
+    });
   }
 
   function drawLineChart() {
