@@ -14,12 +14,14 @@
     table: document.getElementById('historyTable'),
     chart: document.getElementById('historyChart'),
     status: document.getElementById('loadStatus'),
+    retry: document.getElementById('retryBtn'),
   };
 
   const state = {
     chain: DEFAULT_CHAIN,
     range: DEFAULT_RANGE,
-    history: [],
+    historyRaw: [],
+    historyChart: [],
     stats: null,
     meta: null,
     metaHistory: null,
@@ -30,6 +32,12 @@
     points: [],
     tooltip: null,
   };
+
+  const CHART_LIMITS = {
+    max: 400,
+    ideal: 300,
+  };
+  const CHART_BUCKETS = [1800, 2400, 3600];
 
   function parseQuery() {
     const params = new URLSearchParams(location.search);
@@ -88,6 +96,58 @@
     if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
     if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
     return `${Math.round(ageSec / 86400)} d ago`;
+  }
+
+  function pickBucketSize(spanSec) {
+    for (const bucket of CHART_BUCKETS) {
+      if (Math.ceil(spanSec / bucket) <= CHART_LIMITS.max) return bucket;
+    }
+    return CHART_BUCKETS[CHART_BUCKETS.length - 1];
+  }
+
+  function downsampleHistory(points) {
+    if (state.range !== '7d' || points.length <= CHART_LIMITS.max) return points.slice();
+    const first = points[0];
+    const last = points[points.length - 1];
+    const spanSec = Math.max(1, last.ts - first.ts);
+    const bucketSize = pickBucketSize(spanSec);
+
+    const aggregated = [];
+    let bucketStart = Math.floor(first.ts / bucketSize) * bucketSize;
+    let idx = 0;
+    while (bucketStart <= last.ts && idx < points.length) {
+      const bucketEnd = bucketStart + bucketSize;
+      const bucketPts = [];
+      while (idx < points.length && points[idx].ts < bucketEnd) {
+        bucketPts.push(points[idx]);
+        idx += 1;
+      }
+      if (bucketPts.length) {
+        const feeAvg = bucketPts.reduce((sum, p) => sum + p.feeUsd, 0) / bucketPts.length;
+        const middle = bucketPts[Math.floor(bucketPts.length / 2)];
+        aggregated.push({
+          ts: middle.ts,
+          feeUsd: feeAvg,
+          speedSec: middle.speedSec,
+          status: middle.status,
+        });
+      }
+      bucketStart = bucketEnd;
+    }
+
+    if (!aggregated.length) return points.slice();
+    if (aggregated[0].ts !== first.ts) aggregated.unshift({ ...first });
+    const lastAgg = aggregated[aggregated.length - 1];
+    if (lastAgg.ts !== last.ts) aggregated.push({ ...last });
+    while (aggregated.length > CHART_LIMITS.max + 2) {
+      aggregated.splice(1, 1);
+    }
+    return aggregated;
+  }
+
+  function setRetryVisible(show) {
+    if (!els.retry) return;
+    els.retry.hidden = !show;
   }
 
   function ensureTooltip() {
@@ -164,7 +224,7 @@
 
   function renderTable() {
     if (!els.table) return;
-    const rows = state.history.slice(-20).reverse();
+    const rows = state.historyRaw.slice(-20).reverse();
     if (!rows.length) {
       const suffix = lastWrittenText();
       const message = suffix ? `No data yet. ${suffix}` : 'No data yet';
@@ -211,7 +271,7 @@
     canvas.height = height;
 
     ctx.clearRect(0, 0, width, height);
-    const points = state.history;
+    const points = state.historyChart;
     chartUI.points = [];
     hideTooltip();
     if (!points.length) return;
@@ -320,7 +380,7 @@
     const data = payload?.data;
     state.metaHistory = payload?.meta || null;
     const pts = Array.isArray(data?.points) ? data.points : [];
-    state.history = pts
+    state.historyRaw = pts
       .map(p => ({
         ...p,
         feeUsd: Number(p.feeUsd),
@@ -328,6 +388,7 @@
       }))
       .filter(p => Number.isFinite(p.feeUsd) && Number.isFinite(p.ts))
       .sort((a,b) => a.ts - b.ts);
+    state.historyChart = downsampleHistory(state.historyRaw);
   }
 
   async function fetchMeta() {
@@ -341,15 +402,26 @@
     return `Last written at ${new Date(ts * 1000).toLocaleString()}`;
   }
 
+  function isPartialHistory() {
+    if (!state.metaHistory) return false;
+    if (state.metaHistory.downsampled) return true;
+    const original = Number(state.metaHistory.originalCount || 0);
+    const current = Number(state.metaHistory.count || state.historyRaw.length || 0);
+    return original > 0 && current > 0 && original > current;
+  }
+
   async function refresh() {
     setStatus('Loading…');
+    setRetryVisible(false);
     state.error = null;
     try {
       await Promise.all([fetchStats(), fetchHistory(), fetchMeta()]);
       renderAll();
-      if (!state.history.length) {
-        const suffix = lastWrittenText();
+      const suffix = lastWrittenText();
+      if (!state.historyRaw.length) {
         setStatus(suffix ? `No data yet. ${suffix}` : 'No data yet');
+      } else if (isPartialHistory()) {
+        setStatus(suffix ? `Data partial. ${suffix}` : 'Data partial');
       } else {
         setStatus('');
       }
@@ -359,13 +431,13 @@
       renderAll();
       const suffix = lastWrittenText();
       setStatus(`${state.error}${suffix ? ` (${suffix})` : ''}`, true);
+      setRetryVisible(true);
     }
   }
 
   function handleControlEvents() {
-    const retryBtn = document.getElementById('retryBtn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => {
+    if (els.retry) {
+      els.retry.addEventListener('click', () => {
         refresh();
       });
     }
