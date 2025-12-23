@@ -101,6 +101,39 @@
     return `${Math.round(ageSec / 86400)} d ago`;
   }
 
+  function formatTickTime(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000);
+    const hh = d.getHours().toString().padStart(2, '0');
+    const mm = d.getMinutes().toString().padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  function maxTickLabels(width) {
+    if (width < 360) return 3;
+    if (width < 480) return 4;
+    if (width < 640) return 6;
+    return 8;
+  }
+
+  function buildTickIndexes(count, width) {
+    if (count <= 0) return [];
+    if (count === 1) return [0];
+    const target = Math.min(maxTickLabels(width), count);
+    if (target === 1) return [count - 1];
+    const step = (count - 1) / (target - 1);
+    const idxs = [];
+    for (let i = 0; i < target; i++) {
+      idxs.push(Math.round(i * step));
+    }
+    idxs.push(count - 1);
+    const unique = Array.from(new Set(idxs)).sort((a, b) => a - b);
+    while (unique.length > target) {
+      unique.splice(unique.length - 2, 1);
+    }
+    return unique;
+  }
+
   function downsampleHistory(points) {
     if (state.range !== '7d' || points.length <= CHART_LIMITS.max) return points.slice();
     const first = points[0];
@@ -323,12 +356,14 @@
 
     ctx.fillStyle = '#0f172a';
     ctx.font = '11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const step = Math.max(1, Math.floor(n / 6));
-    points.forEach((pt, idx) => {
-      if (idx % step !== 0 && idx !== n - 1) return;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const tickIdxs = buildTickIndexes(points.length, width);
+    tickIdxs.forEach(idx => {
+      const pt = points[idx];
       const x = padLeft + dx * idx;
-      const label = formatTime(pt.ts, state.range);
-      ctx.fillText(label, x - 12, height - padBottom + 16);
+      const label = formatTickTime(pt.ts);
+      ctx.fillText(label, x, height - padBottom + 12);
     });
   }
 
