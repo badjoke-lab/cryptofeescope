@@ -2,6 +2,21 @@
   const DEFAULT_CHAIN = 'eth';
   const DEFAULT_RANGE = '24h';
   const CHAINS = ['btc','eth','bsc','sol','tron','avax','xrp','arbitrum','optimism'];
+  const URL_STATE_DEFAULTS = {
+    q: '',
+    chains: [DEFAULT_CHAIN],
+    sort: null,
+    dir: null,
+    currency: 'usd',
+    range: DEFAULT_RANGE,
+  };
+  const URL_STATE_CONFIG = {
+    allowedChains: CHAINS,
+    allowedSorts: ['fee', 'speed', 'chain'],
+    allowedDirs: ['asc', 'desc'],
+    allowedCurrencies: ['usd', 'jpy'],
+    allowedRanges: ['24h', '7d'],
+  };
   const els = {
     chain: document.getElementById('chainSelect'),
     rangeButtons: Array.from(document.querySelectorAll('.range-toggle button')),
@@ -41,13 +56,74 @@
   const DEFAULT_EMPTY_HINT = 'Wait for next cron write';
 
   let refreshToken = 0;
+  const urlSync = window.CryptoFeeScopeStateSync;
+  let urlState = { ...URL_STATE_DEFAULTS };
+  let lastSyncedQuery = '';
+  let skipNextLocalSave = false;
 
-  function parseQuery() {
+  function setUrlState(partial) {
+    if (!urlSync) return;
+    const normalized = urlSync.normalizeState(partial, URL_STATE_CONFIG);
+    const next = { ...urlState };
+    Object.keys(partial).forEach((key) => {
+      if (normalized[key] !== undefined) {
+        next[key] = normalized[key];
+      } else if (key in URL_STATE_DEFAULTS) {
+        next[key] = URL_STATE_DEFAULTS[key];
+      }
+    });
+    urlState = { ...URL_STATE_DEFAULTS, ...next };
+  }
+
+  function syncUrlState() {
+    if (!urlSync) return;
+    const params = urlSync.serializeQuery(urlState, URL_STATE_DEFAULTS);
+    const queryString = params.toString();
+    const next = queryString ? `${location.pathname}?${queryString}` : location.pathname;
+    const current = location.pathname + location.search;
+    if (next !== current) {
+      history.replaceState(null, '', next);
+    }
+    lastSyncedQuery = queryString;
+    if (!skipNextLocalSave) {
+      const compacted = urlSync.compactState(urlState, URL_STATE_DEFAULTS);
+      urlSync.saveLocalState(compacted);
+    }
+    skipNextLocalSave = false;
+  }
+
+  function applyUrlStateToUi(nextState) {
+    const chain = Array.isArray(nextState.chains) ? nextState.chains[0] : null;
+    state.chain = chain && CHAINS.includes(chain) ? chain : DEFAULT_CHAIN;
+    state.range = nextState.range || DEFAULT_RANGE;
+  }
+
+  function initializeUrlState() {
+    if (!urlSync) return;
     const params = new URLSearchParams(location.search);
-    const chain = params.get('chain');
-    const range = params.get('range');
-    if (chain && CHAINS.includes(chain)) state.chain = chain;
-    if (range === '24h' || range === '7d') state.range = range;
+    const hasUrlState = urlSync.hasAnyQueryKey(params);
+    const urlParsed = hasUrlState ? urlSync.parseQuery(params, URL_STATE_CONFIG) : {};
+    const localParsed = !hasUrlState ? urlSync.loadLocalState(URL_STATE_CONFIG) : {};
+    urlState = urlSync.mergeState(URL_STATE_DEFAULTS, urlParsed, localParsed);
+    applyUrlStateToUi(urlState);
+    lastSyncedQuery = params.toString();
+    skipNextLocalSave = !hasUrlState;
+    syncUrlState();
+  }
+
+  function handlePopState() {
+    if (!urlSync) return;
+    const params = new URLSearchParams(location.search);
+    const queryString = params.toString();
+    if (queryString === lastSyncedQuery) return;
+    const hasUrlState = urlSync.hasAnyQueryKey(params);
+    const urlParsed = hasUrlState ? urlSync.parseQuery(params, URL_STATE_CONFIG) : {};
+    const localParsed = !hasUrlState ? urlSync.loadLocalState(URL_STATE_CONFIG) : {};
+    urlState = urlSync.mergeState(URL_STATE_DEFAULTS, urlParsed, localParsed);
+    applyUrlStateToUi(urlState);
+    syncControls();
+    refresh();
+    lastSyncedQuery = queryString;
   }
 
   function syncControls() {
@@ -507,6 +583,7 @@
       els.chain.addEventListener('change', (e) => {
         const val = e.target.value;
         state.chain = CHAINS.includes(val) ? val : DEFAULT_CHAIN;
+        setUrlState({ chains: [state.chain] });
         syncUrlState();
         syncControls();
         refresh();
@@ -518,20 +595,13 @@
         const val = btn.dataset.range;
         if (val && (val === '24h' || val === '7d')) {
           state.range = val;
+          setUrlState({ range: state.range });
           syncUrlState();
           syncControls();
           refresh();
         }
       });
     });
-  }
-
-  function syncUrlState() {
-    const params = new URLSearchParams(location.search);
-    params.set('chain', state.chain);
-    params.set('range', state.range);
-    const next = `${location.pathname}?${params.toString()}`;
-    history.replaceState(null, '', next);
   }
 
   function setupThemeAndNav() {
@@ -579,10 +649,10 @@
     });
   }
 
-  parseQuery();
-  syncUrlState();
+  initializeUrlState();
   syncControls();
   handleControlEvents();
+  window.addEventListener('popstate', handlePopState);
   setupThemeAndNav();
   setupChartTooltip();
   setupResize();
