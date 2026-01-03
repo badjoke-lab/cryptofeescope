@@ -49,35 +49,21 @@ function applyTheme(theme) {
 // リポジトリ構成: cryptofeescope/data/fee_snapshot_demo.json
 // → ブラウザからは /data/fee_snapshot_demo.json でアクセスできる
 const SNAPSHOT_URL = "data/fee_snapshot_demo.json";
+const pageState = window.CryptoFeeScopePageState?.createPageState("top-state");
+const safeFetchJson = window.CryptoFeeScopePageState?.safeFetchJson;
+const normalizeError = window.CryptoFeeScopePageState?.normalizeError;
 
 async function fetchFeeSnapshot() {
-  const res = await fetch(SNAPSHOT_URL, { cache: "no-store" });
-
-  if (!res.ok) {
-    // 404 や 500 ならここで止める
-    const text = await res.text().catch(() => "");
-    console.error("Failed to load fee snapshot:", res.status, text.slice(0, 200));
-    throw new Error(`Failed to load fee snapshot: ${res.status}`);
+  if (typeof safeFetchJson !== "function") {
+    const res = await fetch(SNAPSHOT_URL, { cache: "no-store" });
+    return res.json();
   }
 
-  const contentType = res.headers.get("content-type") || "";
-  const text = await res.text();
-
-  // JSON ではなく HTML (例: 404で index.html が返ってくる) の場合、
-  // Unexpected token '<' を避けて原因をログに出す
-  if (!contentType.includes("application/json") && text.trim().startsWith("<")) {
-    console.error("Snapshot response is HTML, not JSON. Check file path /data/fee_snapshot_demo.json.");
-    console.error(text.slice(0, 200));
-    throw new Error("Snapshot is not JSON. Maybe /data/fee_snapshot_demo.json is missing or misconfigured.");
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    console.error("Failed to parse snapshot JSON:", e);
-    console.error("Raw text snippet:", text.slice(0, 200));
-    throw e;
-  }
+  return safeFetchJson(SNAPSHOT_URL, { cache: "no-store" }, (snapshot) => {
+    if (!snapshot || typeof snapshot !== "object") return "Snapshot response missing.";
+    if (!snapshot.chains || typeof snapshot.chains !== "object") return "Snapshot missing chains.";
+    return null;
+  });
 }
 
 // ----- State & formatters -----
@@ -88,6 +74,7 @@ const state = {
   filterStatus: "all",
   sortBy: "default",
   allRows: [],
+  dataEmpty: false,
 };
 let historyMeta = null;
 
@@ -272,7 +259,12 @@ function renderTable(rows) {
   }
   const emptyNote = document.getElementById("empty-note");
 
-  if (!state.snapshot) return;
+  if (!state.snapshot) {
+    if (tbody) tbody.textContent = "";
+    if (tbodyMobile) tbodyMobile.textContent = "";
+    if (emptyNote) emptyNote.classList.add("hidden");
+    return;
+  }
 
   const currency = state.currency; // "usd" or "jpy"
 
@@ -285,7 +277,9 @@ function renderTable(rows) {
     tbodyMobile.textContent = "";
   }
 
-  if (!rowsToRender.length && emptyNote) {
+  if (state.dataEmpty && emptyNote) {
+    emptyNote.classList.add("hidden");
+  } else if (!rowsToRender.length && emptyNote) {
     emptyNote.classList.remove("hidden");
   } else if (emptyNote) {
     emptyNote.classList.add("hidden");
@@ -438,6 +432,11 @@ async function loadSnapshotAndRender() {
   if (updatedEl) {
     updatedEl.textContent = "Loading…";
   }
+  pageState?.setState("loading", {
+    title: "Loading...",
+    message: "Fetching the latest snapshot.",
+  });
+  state.dataEmpty = false;
   try {
     const snapshot = await fetchFeeSnapshot();
     state.snapshot = snapshot;
@@ -445,13 +444,39 @@ async function loadSnapshotAndRender() {
     if (updatedEl) {
       updatedEl.textContent = formatUpdated(snapshot.generatedAt);
     }
-    renderTable(getVisibleRows());
+    if (!state.allRows.length) {
+      state.dataEmpty = true;
+      renderTable([]);
+      pageState?.setState("empty", {
+        title: "No data yet",
+        message: "History is still building or no rows matched. Try again later or loosen filters.",
+        onRetry: loadSnapshotAndRender,
+      });
+    } else {
+      pageState?.setState("ok");
+      renderTable(getVisibleRows());
+    }
     renderFreshness();
   } catch (err) {
     console.error(err);
     if (updatedEl) {
-      updatedEl.textContent = "Error loading data";
+      updatedEl.textContent = "—";
     }
+    state.snapshot = null;
+    state.allRows = [];
+    state.dataEmpty = false;
+    renderTable([]);
+    const normalized = typeof normalizeError === "function" ? normalizeError(err) : {
+      title: "Request failed",
+      message: err?.message || "Failed to load snapshot",
+      details: err?.stack || "",
+    };
+    pageState?.setState("error", {
+      title: normalized.title,
+      message: normalized.message,
+      details: normalized.details,
+      onRetry: loadSnapshotAndRender,
+    });
     renderFreshness();
   }
 }

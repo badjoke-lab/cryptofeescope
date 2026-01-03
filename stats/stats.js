@@ -28,9 +28,11 @@
     freshness: document.getElementById('historyFreshness'),
     table: document.getElementById('historyTable'),
     chart: document.getElementById('historyChart'),
-    status: document.getElementById('loadStatus'),
-    retry: document.getElementById('retryBtn'),
   };
+
+  const pageState = window.CryptoFeeScopePageState?.createPageState('stats-state');
+  const safeFetchJson = window.CryptoFeeScopePageState?.safeFetchJson;
+  const normalizeError = window.CryptoFeeScopePageState?.normalizeError;
 
   const state = {
     chain: DEFAULT_CHAIN,
@@ -41,6 +43,7 @@
     meta: null,
     metaHistory: null,
     error: null,
+    viewMode: 'loading',
   };
 
   const chartUI = {
@@ -136,10 +139,9 @@
     });
   }
 
-  function setStatus(msg, isError = false) {
-    if (!els.status) return;
-    els.status.textContent = msg;
-    els.status.classList.toggle('error', Boolean(isError));
+  function setViewMode(mode, options = {}) {
+    state.viewMode = mode;
+    pageState?.setState(mode, options);
   }
 
   function formatFeeParts(value) {
@@ -256,11 +258,6 @@
     return deduped;
   }
 
-  function setRetryVisible(show) {
-    if (!els.retry) return;
-    els.retry.hidden = !show;
-  }
-
   function ensureTooltip() {
     if (chartUI.tooltip || !els.chart) return;
     const wrap = els.chart.parentElement;
@@ -325,6 +322,14 @@
   }
 
   function renderSummary() {
+    if (state.viewMode !== 'ok') {
+      if (els.avg) els.avg.textContent = '—';
+      if (els.min) els.min.textContent = '—';
+      if (els.max) els.max.textContent = '—';
+      if (els.count) els.count.textContent = '—';
+      if (els.updated) els.updated.textContent = '—';
+      return;
+    }
     const s = state.stats;
     applyFeeText(els.avg, s?.feeUsd?.avg);
     applyFeeText(els.min, s?.feeUsd?.min);
@@ -337,9 +342,13 @@
     if (!els.table) return;
     const rows = state.historyRaw.slice(-20).reverse();
     if (!rows.length) {
-      const suffix = lastWrittenText() || DEFAULT_EMPTY_HINT;
-      const message = suffix ? `No data yet. ${suffix}` : 'No data yet';
-      els.table.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
+      if (state.viewMode === 'ok') {
+        const suffix = lastWrittenText() || DEFAULT_EMPTY_HINT;
+        const message = suffix ? `No data yet. ${suffix}` : 'No data yet';
+        els.table.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
+      } else {
+        els.table.textContent = '';
+      }
       return;
     }
     els.table.textContent = '';
@@ -382,6 +391,7 @@
     canvas.height = height;
 
     ctx.clearRect(0, 0, width, height);
+    if (state.viewMode !== 'ok') return;
     const points = state.historyChart;
     chartUI.points = [];
     hideTooltip();
@@ -445,8 +455,8 @@
 
   function renderFreshness() {
     if (!els.freshness) return;
-    if (!state.meta) {
-      els.freshness.textContent = 'Loading…';
+    if (!state.meta || state.viewMode !== 'ok') {
+      els.freshness.textContent = '—';
       return;
     }
     const latest = state.meta.latestTsByChain?.[state.chain];
@@ -465,23 +475,33 @@
     renderFreshness();
   }
 
-  async function fetchJson(url) {
-    const res = await fetch(url);
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (err) {
-      throw new Error(`Invalid response from ${url}`);
+  async function fetchJson(url, validate) {
+    if (typeof safeFetchJson !== 'function') {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data?.ok) {
+        throw new Error(data?.error || `Request failed (${res.status})`);
+      }
+      return data;
     }
-    if (!data?.ok) {
-      throw new Error(data?.error || `Request failed (${res.status})`);
-    }
-    return data;
+
+    return safeFetchJson(url, {}, (payload) => {
+      if (!payload || payload.ok !== true) {
+        return payload?.error || 'Request failed';
+      }
+      if (typeof validate === 'function') return validate(payload);
+      return null;
+    });
   }
 
   async function fetchStats() {
     const url = `/api/stats?range=${state.range}&chain=${state.chain}`;
-    const payload = await fetchJson(url);
+    const payload = await fetchJson(url, (data) => {
+      if (!data?.data?.chains || !Array.isArray(data.data.chains)) {
+        return 'Invalid stats payload';
+      }
+      return null;
+    });
     const data = payload?.data;
     const match = Array.isArray(data?.chains) ? data.chains.find(c => c.chain === state.chain) : null;
     state.stats = match || null;
@@ -489,7 +509,12 @@
 
   async function fetchHistory() {
     const url = `/api/history?range=${state.range}&chain=${state.chain}&limit=2000`;
-    const payload = await fetchJson(url);
+    const payload = await fetchJson(url, (data) => {
+      if (!data?.data || !Array.isArray(data.data.points)) {
+        return 'Invalid history payload';
+      }
+      return null;
+    });
     const data = payload?.data;
     state.metaHistory = payload?.meta || null;
     const pts = Array.isArray(data?.points) ? data.points : [];
@@ -505,7 +530,12 @@
   }
 
   async function fetchMeta() {
-    const payload = await fetchJson('/api/meta');
+    const payload = await fetchJson('/api/meta', (data) => {
+      if (!data?.data || typeof data.data !== 'object') {
+        return 'Invalid meta payload';
+      }
+      return null;
+    });
     state.meta = payload?.data || null;
   }
 
@@ -525,15 +555,24 @@
 
   async function refresh() {
     const token = ++refreshToken;
-    setStatus('Loading…');
-    setRetryVisible(false);
+    setViewMode('loading', {
+      title: 'Loading...',
+      message: 'Fetching the latest stats.',
+    });
     state.error = null;
+    state.stats = null;
+    state.historyRaw = [];
+    state.historyChart = [];
+    state.metaHistory = null;
     let timedOut = false;
     const timeoutId = setTimeout(() => {
       if (refreshToken !== token) return;
       timedOut = true;
-      setStatus('Failed to load (timeout)', true);
-      setRetryVisible(true);
+      setViewMode('error', {
+        title: 'Request timed out',
+        message: 'The API did not respond in time.',
+        onRetry: refresh,
+      });
     }, LOAD_TIMEOUT_MS);
     let aborted = false;
     try {
@@ -542,16 +581,31 @@
         aborted = true;
         return;
       }
-      renderAll();
       const suffix = lastWrittenText();
       if (!state.historyRaw.length) {
         const hint = suffix || DEFAULT_EMPTY_HINT;
-        setStatus(hint ? `No data yet. ${hint}` : 'No data yet');
-      } else if (isPartialHistory()) {
-        setStatus(suffix ? `Data partial. ${suffix}` : 'Data partial');
+        const message = hint
+          ? `History is still building. ${hint}`
+          : 'History is still building.';
+        setViewMode('empty', {
+          title: 'No data yet',
+          message: `${message} Try range=24h or check back later.`,
+          onRetry: refresh,
+        });
+      } else if (state.historyRaw.length < 2) {
+        const hint = suffix || DEFAULT_EMPTY_HINT;
+        const message = hint
+          ? `Not enough points yet. ${hint}`
+          : 'Not enough points yet.';
+        setViewMode('empty', {
+          title: 'Not enough data',
+          message: `${message} Try range=24h or check back later.`,
+          onRetry: refresh,
+        });
       } else {
-        setStatus('');
+        setViewMode('ok');
       }
+      renderAll();
     } catch (err) {
       console.error(err);
       state.error = err instanceof Error ? err.message : 'Failed to load history';
@@ -559,13 +613,16 @@
         aborted = true;
         return;
       }
+      const normalized = typeof normalizeError === 'function'
+        ? normalizeError(err)
+        : { title: 'Request failed', message: state.error, details: err?.stack || '' };
+      setViewMode('error', {
+        title: normalized.title,
+        message: normalized.message || state.error,
+        details: normalized.details,
+        onRetry: refresh,
+      });
       renderAll();
-      const suffix = lastWrittenText();
-      const hint = suffix || DEFAULT_EMPTY_HINT;
-      const label = 'Failed to load';
-      const extra = state.error && state.error !== label ? `: ${state.error}` : '';
-      setStatus(`${label}${extra}${hint ? ` (${hint})` : ''}`, true);
-      setRetryVisible(true);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -573,12 +630,6 @@
   }
 
   function handleControlEvents() {
-    if (els.retry) {
-      els.retry.addEventListener('click', () => {
-        refresh();
-      });
-    }
-
     if (els.chain) {
       els.chain.addEventListener('change', (e) => {
         const val = e.target.value;
