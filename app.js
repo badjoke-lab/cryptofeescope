@@ -102,6 +102,26 @@ const VALID_SORTS = [
   "chain_desc",
 ];
 
+const SHARED_CHAINS = ["btc", "eth", "bsc", "sol", "tron", "avax", "xrp", "arbitrum", "optimism"];
+const DEFAULT_CHAIN = "eth";
+
+const URL_STATE_DEFAULTS = {
+  q: "",
+  chains: [DEFAULT_CHAIN],
+  sort: null,
+  dir: null,
+  currency: "usd",
+  range: "24h",
+};
+
+const URL_STATE_CONFIG = {
+  allowedChains: SHARED_CHAINS,
+  allowedSorts: ["fee", "speed", "chain"],
+  allowedDirs: ["asc", "desc"],
+  allowedCurrencies: ["usd", "jpy"],
+  allowedRanges: ["24h", "7d"],
+};
+
 const METHOD_ANCHORS = {
   btc: "btc",
   eth: "eth",
@@ -454,31 +474,29 @@ async function fetchHistoryMeta() {
 function bindCurrencyButtons() {
   const usdBtn = document.getElementById("currency-usd");
   const jpyBtn = document.getElementById("currency-jpy");
-  const map = { usd: usdBtn, jpy: jpyBtn };
-
-  function syncActive() {
-    Object.entries(map).forEach(([key, el]) => {
-      if (!el) return;
-      el.classList.toggle("active", state.currency === key);
-    });
-  }
+  uiControls.usdBtn = usdBtn;
+  uiControls.jpyBtn = jpyBtn;
 
   if (usdBtn) {
     usdBtn.addEventListener("click", () => {
       state.currency = "usd";
-      syncActive();
+      setUrlState({ currency: "usd" });
+      syncCurrencyButtons();
+      syncUrlState();
       renderTable(getVisibleRows());
     });
   }
   if (jpyBtn) {
     jpyBtn.addEventListener("click", () => {
       state.currency = "jpy";
-      syncActive();
+      setUrlState({ currency: "jpy" });
+      syncCurrencyButtons();
+      syncUrlState();
       renderTable(getVisibleRows());
     });
   }
 
-  syncActive();
+  syncCurrencyButtons();
 }
 
 function bindNavToggle() {
@@ -505,40 +523,129 @@ function bindNavToggle() {
   syncForViewport();
 }
 
-function applyQueryParamsFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const qParam = params.get("q");
-  const statusParam = params.get("status");
-  const sortParam = params.get("sort");
+const urlSync = window.CryptoFeeScopeStateSync;
+let urlState = { ...URL_STATE_DEFAULTS };
+let lastSyncedQuery = "";
+let skipNextLocalSave = false;
+let searchDebounceId = null;
+const uiControls = {
+  searchInput: null,
+  statusSelect: null,
+  sortSelect: null,
+  usdBtn: null,
+  jpyBtn: null,
+};
 
-  state.searchQuery = typeof qParam === "string" ? qParam : "";
-  const normalizedStatus = typeof statusParam === "string" ? statusParam.toLowerCase() : null;
-  if (VALID_STATUSES.includes(normalizedStatus)) {
-    state.filterStatus = normalizedStatus;
+function mapSortByToQuery(sortBy) {
+  if (sortBy === "fee_asc") return { sort: "fee", dir: "asc" };
+  if (sortBy === "fee_desc") return { sort: "fee", dir: "desc" };
+  if (sortBy === "speed_asc") return { sort: "speed", dir: "asc" };
+  if (sortBy === "speed_desc") return { sort: "speed", dir: "desc" };
+  if (sortBy === "chain_asc") return { sort: "chain", dir: "asc" };
+  if (sortBy === "chain_desc") return { sort: "chain", dir: "desc" };
+  return { sort: null, dir: null };
+}
+
+function mapQueryToSortBy(sort, dir) {
+  if (sort === "fee" && dir === "asc") return "fee_asc";
+  if (sort === "fee" && dir === "desc") return "fee_desc";
+  if (sort === "speed" && dir === "asc") return "speed_asc";
+  if (sort === "speed" && dir === "desc") return "speed_desc";
+  if (sort === "chain" && dir === "asc") return "chain_asc";
+  if (sort === "chain" && dir === "desc") return "chain_desc";
+  return "default";
+}
+
+function setUrlState(partial) {
+  if (!urlSync) return;
+  const normalized = urlSync.normalizeState(partial, URL_STATE_CONFIG);
+  const next = { ...urlState };
+  Object.keys(partial).forEach((key) => {
+    if (normalized[key] !== undefined) {
+      next[key] = normalized[key];
+    } else if (key in URL_STATE_DEFAULTS) {
+      next[key] = URL_STATE_DEFAULTS[key];
+    }
+  });
+  urlState = { ...URL_STATE_DEFAULTS, ...next };
+}
+
+function applyUrlStateToUi(nextState) {
+  state.searchQuery = nextState.q || "";
+  state.currency = nextState.currency || "usd";
+  state.sortBy = mapQueryToSortBy(nextState.sort, nextState.dir);
+}
+
+function syncUrlState() {
+  if (!urlSync) return;
+  const params = urlSync.serializeQuery(urlState, URL_STATE_DEFAULTS);
+  const queryString = params.toString();
+  const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+  const current = window.location.pathname + window.location.search;
+  if (nextUrl !== current) {
+    history.replaceState({}, "", nextUrl);
   }
-  const normalizedSort = typeof sortParam === "string" ? sortParam.toLowerCase() : null;
-  if (VALID_SORTS.includes(normalizedSort)) {
-    state.sortBy = normalizedSort;
+  lastSyncedQuery = queryString;
+  if (!skipNextLocalSave) {
+    const compacted = urlSync.compactState(urlState, URL_STATE_DEFAULTS);
+    urlSync.saveLocalState(compacted);
+  }
+  skipNextLocalSave = false;
+}
+
+function scheduleUrlSync() {
+  if (searchDebounceId) window.clearTimeout(searchDebounceId);
+  searchDebounceId = window.setTimeout(() => {
+    searchDebounceId = null;
+    syncUrlState();
+  }, 300);
+}
+
+function initializeUrlState() {
+  if (!urlSync) return;
+  const params = new URLSearchParams(window.location.search);
+  const hasUrlState = urlSync.hasAnyQueryKey(params);
+  const urlParsed = hasUrlState ? urlSync.parseQuery(params, URL_STATE_CONFIG) : {};
+  const localParsed = !hasUrlState ? urlSync.loadLocalState(URL_STATE_CONFIG) : {};
+  urlState = urlSync.mergeState(URL_STATE_DEFAULTS, urlParsed, localParsed);
+  applyUrlStateToUi(urlState);
+  lastSyncedQuery = params.toString();
+  skipNextLocalSave = !hasUrlState;
+  syncUrlState();
+}
+
+function handlePopState() {
+  if (!urlSync) return;
+  const params = new URLSearchParams(window.location.search);
+  const queryString = params.toString();
+  if (queryString === lastSyncedQuery) return;
+  const hasUrlState = urlSync.hasAnyQueryKey(params);
+  const urlParsed = hasUrlState ? urlSync.parseQuery(params, URL_STATE_CONFIG) : {};
+  const localParsed = !hasUrlState ? urlSync.loadLocalState(URL_STATE_CONFIG) : {};
+  urlState = urlSync.mergeState(URL_STATE_DEFAULTS, urlParsed, localParsed);
+  applyUrlStateToUi(urlState);
+  syncTableControls();
+  syncCurrencyButtons();
+  renderTable(getVisibleRows());
+  lastSyncedQuery = queryString;
+}
+
+function syncTableControls() {
+  if (uiControls.searchInput) {
+    uiControls.searchInput.value = state.searchQuery;
+  }
+  if (uiControls.statusSelect) {
+    uiControls.statusSelect.value = VALID_STATUSES.includes(state.filterStatus) ? state.filterStatus : "all";
+  }
+  if (uiControls.sortSelect) {
+    uiControls.sortSelect.value = VALID_SORTS.includes(state.sortBy) ? state.sortBy : "default";
   }
 }
 
-function syncQueryParams() {
-  const params = new URLSearchParams(window.location.search);
-
-  if (state.searchQuery) params.set("q", state.searchQuery);
-  else params.delete("q");
-
-  if (state.filterStatus && state.filterStatus !== "all") params.set("status", state.filterStatus);
-  else params.delete("status");
-
-  if (state.sortBy && state.sortBy !== "default") params.set("sort", state.sortBy);
-  else params.delete("sort");
-
-  const newQuery = params.toString();
-  const newUrl = newQuery ? `${window.location.pathname}?${newQuery}` : window.location.pathname;
-  if (newUrl !== window.location.pathname + window.location.search) {
-    history.replaceState({}, "", newUrl);
-  }
+function syncCurrencyButtons() {
+  const { usdBtn, jpyBtn } = uiControls;
+  if (usdBtn) usdBtn.classList.toggle("active", state.currency === "usd");
+  if (jpyBtn) jpyBtn.classList.toggle("active", state.currency === "jpy");
 }
 
 function bindTableControls() {
@@ -546,11 +653,16 @@ function bindTableControls() {
   const statusSelect = document.getElementById("statusFilter");
   const sortSelect = document.getElementById("sortBy");
 
+  uiControls.searchInput = searchInput;
+  uiControls.statusSelect = statusSelect;
+  uiControls.sortSelect = sortSelect;
+
   if (searchInput) {
     searchInput.value = state.searchQuery;
     searchInput.addEventListener("input", () => {
       state.searchQuery = searchInput.value;
-      syncQueryParams();
+      setUrlState({ q: state.searchQuery });
+      scheduleUrlSync();
       renderTable(getVisibleRows());
     });
   }
@@ -560,7 +672,6 @@ function bindTableControls() {
     statusSelect.addEventListener("change", () => {
       const value = statusSelect.value;
       state.filterStatus = VALID_STATUSES.includes(value) ? value : "all";
-      syncQueryParams();
       renderTable(getVisibleRows());
     });
   }
@@ -570,7 +681,8 @@ function bindTableControls() {
     sortSelect.addEventListener("change", () => {
       const value = sortSelect.value;
       state.sortBy = VALID_SORTS.includes(value) ? value : "default";
-      syncQueryParams();
+      setUrlState(mapSortByToQuery(state.sortBy));
+      syncUrlState();
       renderTable(getVisibleRows());
     });
   }
@@ -579,7 +691,8 @@ function bindTableControls() {
 // ----- Init -----
 document.addEventListener("DOMContentLoaded", () => {
   applyTheme(getInitialTheme());
-  applyQueryParamsFromUrl();
+  initializeUrlState();
+  window.addEventListener("popstate", handlePopState);
 
   const refreshBtn = document.getElementById("refresh-button");
   if (refreshBtn) {
