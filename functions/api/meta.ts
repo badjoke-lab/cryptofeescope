@@ -27,6 +27,14 @@ type LatestRow = {
   last_ts: number | null;
 };
 
+type RetentionRow = {
+  retention_days: number;
+  last_prune_at: number | null;
+  last_prune_deleted: number | null;
+  last_prune_ok: number | null;
+  last_prune_error: string | null;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -69,6 +77,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     }
 
     const ageSecOverall = latestTsOverall != null ? nowTs - latestTsOverall : null;
+    let retentionMeta: RetentionRow | null = null;
+    try {
+      const retentionStmt = env.DB.prepare(
+        `SELECT retention_days, last_prune_at, last_prune_deleted, last_prune_ok, last_prune_error
+         FROM retention_meta
+         WHERE id = 1;`
+      );
+      const retentionResult = await retentionStmt.all<RetentionRow>();
+      retentionMeta = retentionResult.results?.[0] ?? null;
+    } catch {
+      retentionMeta = null;
+    }
     const body = {
       ok: true,
       data: {
@@ -77,6 +97,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
         latestTsOverall,
         ageSecOverall,
         lastWrittenAt: latestTsOverall,
+        retentionDays: retentionMeta?.retention_days ?? 30,
+        lastPruneAt: retentionMeta?.last_prune_at ?? null,
+        lastPruneDeleted: retentionMeta?.last_prune_deleted ?? null,
+        lastPruneOk:
+          retentionMeta?.last_prune_ok != null
+            ? Boolean(retentionMeta.last_prune_ok)
+            : null,
+        lastPruneError: retentionMeta?.last_prune_error ?? null,
       },
     };
 
