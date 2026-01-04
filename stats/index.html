@@ -68,11 +68,8 @@
                 <button type="button" data-range="7d" class="btn small" id="range7d">7d</button>
               </div>
             </div>
-            <div class="control status" id="loadStatus">Loading…</div>
-            <div class="control">
-              <button type="button" class="btn small" id="retryBtn" hidden>Retry</button>
-            </div>
           </div>
+          <div id="stats-state" class="state-panel hidden" role="status" aria-live="polite"></div>
 
           <div class="summary-grid" id="summaryGrid">
             <div class="summary-card">
@@ -153,6 +150,7 @@
   </footer>
 
   <script src="../feeFormat.js"></script>
+  <script src="../lib/pageState.js"></script>
   <script src="../lib/stateSync.js"></script>
   <script src="./stats.js"></script>
   <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
