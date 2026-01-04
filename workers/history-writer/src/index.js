@@ -1,6 +1,10 @@
 const DEFAULT_SNAPSHOT_URL = "https://cryptofeescope.pages.dev/data/fee_snapshot_demo.json";
 const RETENTION_DAYS = 30;
 const PRUNE_BATCH_LIMIT = 5000;
+const FETCH_TIMEOUT_MS = 10000;
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+
+let lastSnapshotCache = null;
 
 function toUnixSeconds(input) {
   if (typeof input === "number" && Number.isFinite(input)) {
@@ -87,6 +91,29 @@ async function upsertRetentionMeta(env, payload) {
   await statement.run();
 }
 
+async function upsertFetchMeta(env, payload) {
+  const statement = env.DB.prepare(
+    `INSERT INTO fetch_meta
+      (id, last_fetch_error, last_fetch_error_at, last_fetch_failure_key, last_fetch_failures, last_cache_used_at, last_cache_age_minutes)
+      VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+      ON CONFLICT(id) DO UPDATE SET
+        last_fetch_error = excluded.last_fetch_error,
+        last_fetch_error_at = excluded.last_fetch_error_at,
+        last_fetch_failure_key = excluded.last_fetch_failure_key,
+        last_fetch_failures = excluded.last_fetch_failures,
+        last_cache_used_at = excluded.last_cache_used_at,
+        last_cache_age_minutes = excluded.last_cache_age_minutes;`
+  ).bind(
+    payload.lastFetchError ?? null,
+    payload.lastFetchErrorAt ?? null,
+    payload.lastFetchFailureKey ?? null,
+    payload.lastFetchFailures ?? null,
+    payload.lastCacheUsedAt ?? null,
+    payload.lastCacheAgeMinutes ?? null
+  );
+  await statement.run();
+}
+
 async function pruneOldHistory(env) {
   const nowTs = Math.floor(Date.now() / 1000);
   const cutoffTs = nowTs - RETENTION_DAYS * 86400;
@@ -114,16 +141,58 @@ async function pruneOldHistory(env) {
   return { deletedCount, cutoffIso, ok: true };
 }
 
-async function fetchSnapshot(url) {
-  const response = await fetch(url, { cf: { cacheTtl: 0, cacheEverything: false } });
-  if (!response.ok) {
-    throw new Error(`Snapshot fetch failed with status ${response.status}`);
-  }
+function isRetryableError(err) {
+  if (!err) return false;
+  if (err.name === "AbortError") return true;
+  if (err.message === "timeout") return true;
+  return err instanceof TypeError;
+}
+
+async function fetchWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await response.json();
-  } catch (err) {
-    throw new Error("Snapshot fetch returned invalid JSON");
+    const response = await fetch(url, {
+      signal: controller.signal,
+      cf: { cacheTtl: 0, cacheEverything: false },
+    });
+    return response;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+async function fetchSnapshot(url) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+      if (!response.ok) {
+        const error = new Error(`Snapshot fetch failed with status ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      try {
+        return await response.json();
+      } catch (err) {
+        throw new Error("Snapshot fetch returned invalid JSON");
+      }
+    } catch (err) {
+      lastError = err;
+      if (attempt < 1 && isRetryableError(err)) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
+function getFreshSnapshotCache() {
+  if (!lastSnapshotCache) return null;
+  const ageMs = Date.now() - lastSnapshotCache.cachedAtMs;
+  if (ageMs > CACHE_MAX_AGE_MS) return null;
+  return { ...lastSnapshotCache, ageMs };
 }
 
 async function writeRows(env, ts, rows) {
@@ -142,12 +211,50 @@ export default {
   async scheduled(_event, env, ctx) {
     const snapshotUrl = env.SNAPSHOT_URL || DEFAULT_SNAPSHOT_URL;
     let data;
+    let fetchError = null;
+    let cacheUsed = false;
+    let cacheAgeMinutes = null;
     try {
       data = await fetchSnapshot(snapshotUrl);
+      lastSnapshotCache = {
+        data,
+        cachedAt: new Date().toISOString(),
+        cachedAtMs: Date.now(),
+      };
     } catch (err) {
-      console.error("Failed to fetch snapshot", err?.message || err);
-      return;
+      fetchError = err;
+      const cached = getFreshSnapshotCache();
+      if (cached) {
+        cacheUsed = true;
+        cacheAgeMinutes = Math.round(cached.ageMs / 60000);
+        data = cached.data;
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        await upsertFetchMeta(env, {
+          lastFetchError: message,
+          lastFetchErrorAt: Math.floor(Date.now() / 1000),
+          lastFetchFailureKey: "snapshot",
+          lastFetchFailures: JSON.stringify([{ key: "snapshot", message, at: new Date().toISOString() }]),
+          lastCacheUsedAt: null,
+          lastCacheAgeMinutes: null,
+        });
+        console.error("Failed to fetch snapshot", message);
+        return;
+      }
     }
+
+    await upsertFetchMeta(env, {
+      lastFetchError: fetchError ? (fetchError instanceof Error ? fetchError.message : String(fetchError)) : null,
+      lastFetchErrorAt: fetchError ? Math.floor(Date.now() / 1000) : null,
+      lastFetchFailureKey: fetchError ? "snapshot" : null,
+      lastFetchFailures: fetchError
+        ? JSON.stringify([
+            { key: "snapshot", message: fetchError instanceof Error ? fetchError.message : String(fetchError), at: new Date().toISOString() },
+          ])
+        : null,
+      lastCacheUsedAt: cacheUsed ? Math.floor(Date.now() / 1000) : null,
+      lastCacheAgeMinutes: cacheUsed ? cacheAgeMinutes : null,
+    });
 
     const ts = getSnapshotTimestamp(data);
     console.log("Fetched snapshot ts", ts);

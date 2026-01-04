@@ -43,6 +43,15 @@ type RetentionRow = {
   last_prune_error: string | null;
 };
 
+type FetchMetaRow = {
+  last_fetch_error: string | null;
+  last_fetch_error_at: number | null;
+  last_fetch_failure_key: string | null;
+  last_fetch_failures: string | null;
+  last_cache_used_at: number | null;
+  last_cache_age_minutes: number | null;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -148,6 +157,40 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     } catch {
       retentionMeta = null;
     }
+
+    let fetchMeta: FetchMetaRow | null = null;
+    try {
+      const fetchStmt = env.DB.prepare(
+        `SELECT last_fetch_error, last_fetch_error_at, last_fetch_failure_key, last_fetch_failures, last_cache_used_at, last_cache_age_minutes
+         FROM fetch_meta
+         WHERE id = 1;`
+      );
+      const fetchResult = await fetchStmt.all<FetchMetaRow>();
+      fetchMeta = fetchResult.results?.[0] ?? null;
+    } catch {
+      fetchMeta = null;
+    }
+
+    let fetchFailures: Array<{ key: string; message: string; at: string }> = [];
+    if (fetchMeta?.last_fetch_failures) {
+      try {
+        const parsed = JSON.parse(fetchMeta.last_fetch_failures);
+        if (Array.isArray(parsed)) {
+          fetchFailures = parsed
+            .filter((entry) => entry && typeof entry === "object")
+            .map((entry) => ({
+              key: String(entry.key || "unknown"),
+              message: String(entry.message || "unknown"),
+              at: String(entry.at || ""),
+            }));
+        }
+      } catch {
+        fetchFailures = [];
+      }
+    }
+
+    const lastFetchErrorAtIso = toIsoString(fetchMeta?.last_fetch_error_at ?? null);
+    const lastCacheUsedAtIso = toIsoString(fetchMeta?.last_cache_used_at ?? null);
     const body = {
       ok: true,
       data: {
@@ -171,6 +214,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
             ? Boolean(retentionMeta.last_prune_ok)
             : null,
         lastPruneError: retentionMeta?.last_prune_error ?? null,
+        lastFetchError: fetchMeta?.last_fetch_error ?? null,
+        lastFetchErrorAt: lastFetchErrorAtIso,
+        lastFetchFailureKey: fetchMeta?.last_fetch_failure_key ?? null,
+        fetchFailures,
+        cacheUsed: fetchMeta?.last_cache_used_at != null,
+        cacheAgeMinutes: fetchMeta?.last_cache_age_minutes ?? null,
+        lastCacheUsedAt: lastCacheUsedAtIso,
       },
     };
 
