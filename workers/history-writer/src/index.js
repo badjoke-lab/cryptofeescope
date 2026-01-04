@@ -1,4 +1,6 @@
 const DEFAULT_SNAPSHOT_URL = "https://cryptofeescope.pages.dev/data/fee_snapshot_demo.json";
+const RETENTION_DAYS = 30;
+const PRUNE_BATCH_LIMIT = 5000;
 
 function toUnixSeconds(input) {
   if (typeof input === "number" && Number.isFinite(input)) {
@@ -39,15 +41,6 @@ function sanitizeStatus(value) {
   return trimmed.length > 0 && trimmed.length <= 24 ? trimmed : null;
 }
 
-function clampInt(value, min, max) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return min;
-  const int = Math.floor(num);
-  if (int < min) return min;
-  if (int > max) return max;
-  return int;
-}
-
 function getSnapshotTimestamp(data) {
   const candidates = [data?.generatedAt, data?.updatedAt, data?.updated, data?.timestamp];
   for (const value of candidates) {
@@ -71,6 +64,54 @@ function parseChains(data) {
     rows.push({ chain, feeUsd, feeJpy, speedSec, status });
   }
   return rows;
+}
+
+async function upsertRetentionMeta(env, payload) {
+  const statement = env.DB.prepare(
+    `INSERT INTO retention_meta
+      (id, retention_days, last_prune_at, last_prune_deleted, last_prune_ok, last_prune_error)
+      VALUES (1, ?1, ?2, ?3, ?4, ?5)
+      ON CONFLICT(id) DO UPDATE SET
+        retention_days = excluded.retention_days,
+        last_prune_at = excluded.last_prune_at,
+        last_prune_deleted = excluded.last_prune_deleted,
+        last_prune_ok = excluded.last_prune_ok,
+        last_prune_error = excluded.last_prune_error;`
+  ).bind(
+    payload.retentionDays,
+    payload.lastPruneAt,
+    payload.lastPruneDeleted,
+    payload.lastPruneOk ? 1 : 0,
+    payload.lastPruneError ?? null
+  );
+  await statement.run();
+}
+
+async function pruneOldHistory(env) {
+  const nowTs = Math.floor(Date.now() / 1000);
+  const cutoffTs = nowTs - RETENTION_DAYS * 86400;
+  const cutoffIso = new Date(cutoffTs * 1000).toISOString();
+
+  const selectStmt = env.DB.prepare(
+    "SELECT rowid FROM fee_history_points WHERE ts < ?1 ORDER BY ts ASC LIMIT ?2;"
+  ).bind(cutoffTs, PRUNE_BATCH_LIMIT);
+  const { results } = await selectStmt.all();
+  const rowIds = (results || [])
+    .map((row) => Number(row?.rowid))
+    .filter((rowId) => Number.isFinite(rowId));
+
+  if (!rowIds.length) {
+    return { deletedCount: 0, cutoffIso, ok: true };
+  }
+
+  const placeholders = rowIds.map(() => "?").join(", ");
+  const deleteStmt = env.DB.prepare(
+    `DELETE FROM fee_history_points WHERE rowid IN (${placeholders});`
+  ).bind(...rowIds);
+  const result = await deleteStmt.run();
+  const deletedCount = Number(result?.meta?.changes ?? 0);
+
+  return { deletedCount, cutoffIso, ok: true };
 }
 
 async function fetchSnapshot(url) {
@@ -126,22 +167,35 @@ export default {
       })
       .filter((row) => row.feeUsd !== null || row.feeJpy !== null);
 
-    if (!rows.length) return;
+    const insertedPromise = rows.length
+      ? writeRows(env, ts, rows).then((count) => {
+          console.log("Inserted rows", count);
+        })
+      : Promise.resolve();
 
-    const insertedPromise = writeRows(env, ts, rows).then((count) => {
-      console.log("Inserted rows", count);
-    });
-
-    const retentionDays = clampInt(env.HISTORY_RETENTION_DAYS ?? 7, 1, 90);
     const cleanupPromise = insertedPromise.then(async () => {
-      const nowTs = Math.floor(Date.now() / 1000);
-      const cutoffTs = nowTs - retentionDays * 86400;
-      const deleteStmt = env.DB.prepare(
-        "DELETE FROM fee_history_points\nWHERE ts < ?1;"
-      ).bind(cutoffTs);
-      const result = await deleteStmt.all();
-      const deleted = Number(result?.results?.[0]?.changes ?? 0);
-      console.log("Cleanup removed rows", deleted);
+      let pruneResult = null;
+      try {
+        pruneResult = await pruneOldHistory(env);
+        console.log("Prune completed", pruneResult);
+        await upsertRetentionMeta(env, {
+          retentionDays: RETENTION_DAYS,
+          lastPruneAt: Math.floor(Date.now() / 1000),
+          lastPruneDeleted: pruneResult.deletedCount,
+          lastPruneOk: true,
+          lastPruneError: null,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("Prune failed", message);
+        await upsertRetentionMeta(env, {
+          retentionDays: RETENTION_DAYS,
+          lastPruneAt: Math.floor(Date.now() / 1000),
+          lastPruneDeleted: 0,
+          lastPruneOk: false,
+          lastPruneError: message,
+        });
+      }
     });
 
     ctx.waitUntil(Promise.all([insertedPromise, cleanupPromise]));
