@@ -57,6 +57,15 @@
   };
   const LOAD_TIMEOUT_MS = 10000;
   const DEFAULT_EMPTY_HINT = 'Wait for next cron write';
+  const INSUFFICIENT_LABEL = '—';
+  const INSUFFICIENT_TITLES = {
+    too_few_points: 'Insufficient data',
+    gap_too_large: 'Data missing',
+  };
+  const GAP_THRESHOLDS = {
+    '24h': 6 * 60 * 60,
+    '7d': 24 * 60 * 60,
+  };
 
   let refreshToken = 0;
   const urlSync = window.CryptoFeeScopeStateSync;
@@ -159,6 +168,15 @@
     }
 
     el.textContent = parts.display;
+  }
+
+  function isValidFeeValue(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  }
+
+  function getInsufficientTitle(stats) {
+    if (!stats || stats.status !== 'insufficient') return '';
+    return INSUFFICIENT_TITLES[stats.reason] || 'Insufficient data';
   }
 
   function formatTime(ts, range) {
@@ -331,11 +349,31 @@
       return;
     }
     const s = state.stats;
-    applyFeeText(els.avg, s?.feeUsd?.avg);
-    applyFeeText(els.min, s?.feeUsd?.min);
-    applyFeeText(els.max, s?.feeUsd?.max);
-    els.count.textContent = s?.count ?? '—';
-    els.updated.textContent = s?.lastTs ? new Date(s.lastTs * 1000).toLocaleString() : '—';
+    const insufficientTitle = getInsufficientTitle(s);
+    const isInsufficient = s?.status === 'insufficient';
+    if (isInsufficient) {
+      if (els.avg) els.avg.textContent = INSUFFICIENT_LABEL;
+      if (els.min) els.min.textContent = INSUFFICIENT_LABEL;
+      if (els.max) els.max.textContent = INSUFFICIENT_LABEL;
+      if (els.count) els.count.textContent = INSUFFICIENT_LABEL;
+      if (els.updated) els.updated.textContent = INSUFFICIENT_LABEL;
+    } else {
+      applyFeeText(els.avg, s?.feeUsd?.avg);
+      applyFeeText(els.min, s?.feeUsd?.min);
+      applyFeeText(els.max, s?.feeUsd?.max);
+      if (els.count) els.count.textContent = s?.count ?? '—';
+      if (els.updated) {
+        els.updated.textContent = s?.lastTs ? new Date(s.lastTs * 1000).toLocaleString() : '—';
+      }
+    }
+    [els.avg, els.min, els.max, els.count, els.updated].forEach(el => {
+      if (!el) return;
+      if (insufficientTitle) {
+        el.title = insufficientTitle;
+      } else {
+        el.removeAttribute('title');
+      }
+    });
   }
 
   function renderTable() {
@@ -392,6 +430,16 @@
 
     ctx.clearRect(0, 0, width, height);
     if (state.viewMode !== 'ok') return;
+    if (state.stats?.status === 'insufficient') {
+      chartUI.points = [];
+      hideTooltip();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Insufficient data', width / 2, height / 2);
+      return;
+    }
     const points = state.historyChart;
     chartUI.points = [];
     hideTooltip();
@@ -427,14 +475,24 @@
 
     const n = points.length;
     const dx = n > 1 ? innerW / (n - 1) : 0;
+    const gapThreshold = GAP_THRESHOLDS[state.range];
     ctx.beginPath();
     points.forEach((pt, idx) => {
       const x = padLeft + dx * idx;
       const yRatio = allEqual ? 0.5 : (pt.feeUsd - min) / span;
       const y = padTop + innerH - innerH * yRatio;
       chartUI.points.push({ x, y, ts: pt.ts, feeUsd: pt.feeUsd });
-      if (idx === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if (idx === 0) {
+        ctx.moveTo(x, y);
+        return;
+      }
+      const prev = points[idx - 1];
+      const gap = gapThreshold && prev ? pt.ts - prev.ts : 0;
+      if (gapThreshold && gap > gapThreshold) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     });
     ctx.lineWidth = 1.6;
     ctx.strokeStyle = '#0f172a';
@@ -524,7 +582,7 @@
         feeUsd: Number(p.feeUsd),
         ts: Number(p.ts),
       }))
-      .filter(p => Number.isFinite(p.feeUsd) && Number.isFinite(p.ts))
+      .filter(p => isValidFeeValue(p.feeUsd) && Number.isFinite(p.ts))
       .sort((a,b) => a.ts - b.ts);
     state.historyChart = downsampleHistory(state.historyRaw);
   }
