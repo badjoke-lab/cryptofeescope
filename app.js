@@ -146,6 +146,22 @@ function formatAge(ageSec) {
   return `${Math.round(ageSec / 86400)} d ago`;
 }
 
+function normalizeMetaPayload(payload) {
+  return payload?.data ?? payload;
+}
+
+function parseIsoToUnix(iso) {
+  if (typeof iso !== "string") return null;
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return null;
+  return Math.floor(parsed / 1000);
+}
+
+function resolveMetaTimestamp(meta, tsKey, isoKey) {
+  if (meta && typeof meta[tsKey] === "number") return meta[tsKey];
+  return parseIsoToUnix(meta?.[isoKey]);
+}
+
 function applyFeeDisplay(el, parts, displayText) {
   if (!el || !parts) return;
   if (typeof renderFeeValue === "function") {
@@ -418,12 +434,61 @@ function renderTable(rows) {
 function renderFreshness() {
   const freshnessEl = document.getElementById("history-freshness");
   if (!freshnessEl) return;
-  if (!historyMeta) {
+  const meta = normalizeMetaPayload(historyMeta);
+  if (!meta) {
     freshnessEl.textContent = "Loading…";
+    renderHealthBadge();
     return;
   }
-  const age = typeof historyMeta.ageSecOverall === "number" ? historyMeta.ageSecOverall : null;
+  const age = typeof meta.ageSecOverall === "number" ? meta.ageSecOverall : null;
   freshnessEl.textContent = age == null ? "—" : formatAge(age);
+  renderHealthBadge();
+}
+
+function renderHealthBadge() {
+  const badgeEl = document.getElementById("healthBadge");
+  if (!badgeEl) return;
+  const meta = normalizeMetaPayload(historyMeta);
+  if (!meta) {
+    badgeEl.textContent = "Health: —";
+    badgeEl.classList.remove("stale");
+    return;
+  }
+  const nowTs = typeof meta.nowTs === "number" ? meta.nowTs : Math.floor(Date.now() / 1000);
+  const lastWriteTs =
+    resolveMetaTimestamp(meta, "lastWrittenAt", "lastWriteAt") ??
+    resolveMetaTimestamp(meta, "latestTsOverall", "lastWriteAt");
+  const lastOkTs = resolveMetaTimestamp(meta, "lastOkTs", "lastOkAt");
+  const stale = meta.stale === true;
+  const reason = typeof meta.staleReason === "string" ? meta.staleReason : null;
+  badgeEl.classList.toggle("stale", stale);
+
+  if (stale) {
+    if (reason === "no_write") {
+      badgeEl.textContent = "Health: STALE · no writes yet";
+      return;
+    }
+    if (reason === "write_too_old") {
+      const age = lastWriteTs != null ? formatAge(nowTs - lastWriteTs) : "—";
+      badgeEl.textContent = `Health: STALE · last write ${age}`;
+      return;
+    }
+    if (reason === "ok_too_old") {
+      const age = lastOkTs != null ? formatAge(nowTs - lastOkTs) : "—";
+      badgeEl.textContent = `Health: STALE · last ok ${age}`;
+      return;
+    }
+    badgeEl.textContent = "Health: STALE";
+    return;
+  }
+
+  const updatedAge = lastWriteTs != null ? formatAge(nowTs - lastWriteTs) : "—";
+  let label = `Health: OK · updated ${updatedAge}`;
+  const gapHours = typeof meta.maxGapHours24h === "number" ? meta.maxGapHours24h : null;
+  if (gapHours != null && gapHours >= 6) {
+    label += ` (gap ${Math.round(gapHours)}h)`;
+  }
+  badgeEl.textContent = label;
 }
 
 // ----- Lifecycle -----

@@ -26,6 +26,7 @@
     count: document.getElementById('count'),
     updated: document.getElementById('updated'),
     freshness: document.getElementById('historyFreshness'),
+    health: document.getElementById('healthBadge'),
     table: document.getElementById('historyTable'),
     chart: document.getElementById('historyChart'),
   };
@@ -195,6 +196,18 @@
     if (ageSec < 3600) return `${Math.round(ageSec / 60)} min ago`;
     if (ageSec < 86400) return `${Math.round(ageSec / 3600)} h ago`;
     return `${Math.round(ageSec / 86400)} d ago`;
+  }
+
+  function parseIsoToUnix(iso) {
+    if (typeof iso !== 'string') return null;
+    const parsed = Date.parse(iso);
+    if (Number.isNaN(parsed)) return null;
+    return Math.floor(parsed / 1000);
+  }
+
+  function resolveMetaTimestamp(meta, tsKey, isoKey) {
+    if (meta && typeof meta[tsKey] === 'number') return meta[tsKey];
+    return parseIsoToUnix(meta?.[isoKey]);
   }
 
   function formatTickTime(ts) {
@@ -526,11 +539,56 @@
     els.freshness.textContent = formatAge(age);
   }
 
+  function renderHealth() {
+    if (!els.health) return;
+    if (!state.meta) {
+      els.health.textContent = 'Health: —';
+      els.health.classList.remove('stale');
+      return;
+    }
+    const nowTs = typeof state.meta.nowTs === 'number' ? state.meta.nowTs : Math.floor(Date.now() / 1000);
+    const lastWriteTs =
+      resolveMetaTimestamp(state.meta, 'lastWrittenAt', 'lastWriteAt') ??
+      resolveMetaTimestamp(state.meta, 'latestTsOverall', 'lastWriteAt');
+    const lastOkTs = resolveMetaTimestamp(state.meta, 'lastOkTs', 'lastOkAt');
+    const stale = state.meta.stale === true;
+    const reason = typeof state.meta.staleReason === 'string' ? state.meta.staleReason : null;
+    els.health.classList.toggle('stale', stale);
+
+    if (stale) {
+      if (reason === 'no_write') {
+        els.health.textContent = 'Health: STALE · no writes yet';
+        return;
+      }
+      if (reason === 'write_too_old') {
+        const age = lastWriteTs != null ? formatAge(nowTs - lastWriteTs) : '—';
+        els.health.textContent = `Health: STALE · last write ${age}`;
+        return;
+      }
+      if (reason === 'ok_too_old') {
+        const age = lastOkTs != null ? formatAge(nowTs - lastOkTs) : '—';
+        els.health.textContent = `Health: STALE · last ok ${age}`;
+        return;
+      }
+      els.health.textContent = 'Health: STALE';
+      return;
+    }
+
+    const updatedAge = lastWriteTs != null ? formatAge(nowTs - lastWriteTs) : '—';
+    let label = `Health: OK · updated ${updatedAge}`;
+    const gapHours = typeof state.meta.maxGapHours24h === 'number' ? state.meta.maxGapHours24h : null;
+    if (gapHours != null && gapHours >= 6) {
+      label += ` (gap ${Math.round(gapHours)}h)`;
+    }
+    els.health.textContent = label;
+  }
+
   function renderAll() {
     renderSummary();
     renderTable();
     drawLineChart();
     renderFreshness();
+    renderHealth();
   }
 
   async function fetchJson(url, validate) {
