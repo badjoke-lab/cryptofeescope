@@ -52,7 +52,20 @@
         </div>
       </a>
       <div class="spacer"></div>
-      <div class="health-badge" id="healthBadge">Health: —</div>
+      <div class="health-details">
+        <div class="health-badge" id="healthBadge">Health: —</div>
+        <details class="health-details-popover" id="healthDetails">
+          <summary>Details</summary>
+          <div class="health-details-panel">
+            <div>Last write: <span data-health-detail="lastWriteAt">—</span></div>
+            <div>Last OK: <span data-health-detail="lastOkAt">—</span></div>
+            <div>24h points: <span data-health-detail="points24h">—</span></div>
+            <div>24h max gap: <span data-health-detail="maxGapHours24h">—</span></div>
+            <div>Last error: <span data-health-detail="lastFetchError">—</span></div>
+            <div>Last error at: <span data-health-detail="lastFetchErrorAt">—</span></div>
+          </div>
+        </details>
+      </div>
       <div class="toolbar">
         <!-- Refresh button (green) -->
         <button id="refresh-button" class="btn btn-primary" type="button">

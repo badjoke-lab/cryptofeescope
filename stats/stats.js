@@ -241,6 +241,32 @@
     return parseIsoToUnix(meta?.[isoKey]);
   }
 
+  function formatHealthDetailValue(value) {
+    if (value == null) return '—';
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? String(value) : '—';
+    }
+    if (typeof value === 'string') return value.trim() ? value : '—';
+    return '—';
+  }
+
+  function renderHealthDetails(meta) {
+    const details = {
+      lastWriteAt: meta?.lastWriteAt,
+      lastOkAt: meta?.lastOkAt,
+      points24h: meta?.points24h,
+      maxGapHours24h: meta?.maxGapHours24h,
+      lastFetchError: meta?.lastFetchError,
+      lastFetchErrorAt: meta?.lastFetchErrorAt,
+    };
+    Object.entries(details).forEach(([key, value]) => {
+      const el = document.querySelector(`[data-health-detail="${key}"]`);
+      if (el) {
+        el.textContent = formatHealthDetailValue(value);
+      }
+    });
+  }
+
   function formatTickTime(ts) {
     if (!ts) return '—';
     const d = new Date(ts * 1000);
@@ -572,6 +598,7 @@
 
   function renderHealth() {
     if (!els.health) return;
+    renderHealthDetails(state.meta);
     if (!state.meta) {
       els.health.textContent = 'Health: —';
       els.health.classList.remove('stale');
@@ -839,6 +866,23 @@
     }
   }
 
+  function setupHealthDetailsPopover() {
+    const details = document.getElementById('healthDetails');
+    if (!details) return;
+
+    document.addEventListener('click', (event) => {
+      if (!details.open) return;
+      if (details.contains(event.target)) return;
+      details.removeAttribute('open');
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && details.open) {
+        details.removeAttribute('open');
+      }
+    });
+  }
+
   function setupResize() {
     let rafId = 0;
     window.addEventListener('resize', () => {
@@ -852,6 +896,7 @@
   handleControlEvents();
   window.addEventListener('popstate', handlePopState);
   setupThemeAndNav();
+  setupHealthDetailsPopover();
   setupChartTooltip();
   setupResize();
   refresh();
