@@ -124,6 +124,7 @@
               <li><span class="status-dot fast"></span>Fast  ≈ a few seconds to tens of seconds</li>
               <li><span class="status-dot normal"></span>Normal ≈ a few minutes</li>
               <li><span class="status-dot slow"></span>Slow  ≈ 10+ minutes</li>
+              <li><span class="status-dot degraded"></span>Degraded ≈ delayed or incomplete data</li>
             </ul>
           </div>
           <p class="updated-label">Updated <span id="updated-label">—</span></p>
@@ -141,8 +142,7 @@
                 <option value="fast">Fast</option>
                 <option value="normal">Normal</option>
                 <option value="slow">Slow</option>
-                <option value="unknown">Unknown</option>
-                <option value="error">Error</option>
+                <option value="degraded">Degraded</option>
               </select>
             </label>
             <label class="control" for="sortBy">
@@ -165,9 +165,9 @@
                 <tr>
                   <th class="col-chain">Chain</th>
                   <th class="col-ticker">Ticker</th>
-                  <th class="col-fee" id="fee-header">Fee (est. USD)</th>
+                  <th class="col-fee" id="fee-header">Estimated Tx Fee (USD/JPY)</th>
                   <th class="col-change">24h change</th>
-                  <th class="col-speed">Speed (est.)</th>
+                  <th class="col-speed">Estimated Confirmation Time (sec)</th>
                   <th class="col-status">Status</th>
                 </tr>
               </thead>
@@ -179,6 +179,7 @@
               </tbody>
             </table>
             <p id="empty-note" class="empty-note hidden">No chains match your filters.</p>
+            <p class="hint subtle">Values are estimates. 24h/7d may show — when data is insufficient.</p>
           </div>
         </div>
       </article>

@@ -61,12 +61,31 @@
           CryptoFeeScope shows <strong>estimated</strong> fees and speeds for a <strong>typical transfer</strong> on each supported chain. Use these numbers for quick comparison, not as guaranteed quotes.
         </p>
 
-        <h3>What you see on the dashboard</h3>
+        <h3>What you’re seeing</h3>
         <ul>
-          <li><strong>Fee (est.)</strong>: typical network fee expressed in USD or JPY.</li>
-          <li><strong>Speed (est.)</strong>: rough time to first confirmation.</li>
-          <li><strong>Status</strong>: fast / normal / slow labels defined for this site.</li>
-          <li><strong>Tier</strong>: future label for priority classes; currently a single standard tier is assumed.</li>
+          <li><strong>Estimated Tx Fee (USD/JPY)</strong>: typical network fee for a basic transfer, shown in USD or JPY.</li>
+          <li><strong>Estimated Confirmation Time (sec)</strong>: rough time to first confirmation.</li>
+          <li><strong>Status</strong>: Fast / Normal / Slow / Degraded as a congestion/latency indicator.</li>
+        </ul>
+
+        <h3>How it’s computed (high level)</h3>
+        <ul>
+          <li>EVM chains: RPC gas signals + fixed typical transfer gas limit + FX conversion (CoinGecko demo data).</li>
+          <li>Non-EVM chains: chain-specific RPC fee hints for a typical transfer (BTC fee-per-byte, SOL base/priority, XRP base fee, TRON resource costs).</li>
+          <li>If live fetches fail, cached values may be shown. Check cache age on Top/Stats (History/History updated labels).</li>
+        </ul>
+
+        <h3>Data quality (missing / insufficient)</h3>
+        <ul>
+          <li>24h / 7d summaries show <strong>—</strong> (Insufficient data) when coverage is low or gaps are large.</li>
+          <li>Charts do not interpolate missing points; lines break or are not drawn.</li>
+        </ul>
+
+        <h3>Comparison notes</h3>
+        <ul>
+          <li>Chains differ in fee mechanics (gas, tx size, resources, L1 data), so values are directional, not strict apples-to-apples.</li>
+          <li>L2s and alternative fee designs can shift what “fee” represents versus L1s.</li>
+          <li>All figures are estimates for comparison, not guaranteed quotes.</li>
         </ul>
 
         <h3>Shared assumptions</h3>
@@ -79,7 +98,6 @@
 
         <h3>Comparability (Apples-to-apples?)</h3>
         <ul>
-          <li>Unlike fiat/BTC-denominated market data, network fees are not a single universal metric. Each chain has a different fee mechanism (gas, tx size, resources, L1 data, etc.).</li>
           <li>CryptoFeeScope compares “typical transfer” estimates per chain. This is close to a common baseline for simple transfers, but it is not a guaranteed apples-to-apples quote across all chains.</li>
           <li>Sending $100 instead of $10 usually does not change the network fee for most chains. Fees depend more on transaction type/size and congestion than transfer amount.</li>
           <li>For stricter comparisons, we plan scenario modes in later versions (e.g., Native transfer / Stablecoin transfer / Swap).</li>

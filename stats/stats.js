@@ -76,6 +76,13 @@
     too_few_points: 'Insufficient data',
     gap_too_large: 'Data missing',
   };
+  const STATUS_LABELS = {
+    fast: 'Fast',
+    normal: 'Normal',
+    slow: 'Slow',
+    degraded: 'Degraded',
+  };
+  const DEGRADED_STATUSES = new Set(['unknown', 'error', 'degraded']);
   const GAP_THRESHOLDS = {
     '24h': 6 * 60 * 60,
     '7d': 24 * 60 * 60,
@@ -200,6 +207,17 @@
       return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
     }
     return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+  }
+
+  function normalizeStatus(status) {
+    const raw = (status || 'unknown').toLowerCase();
+    return DEGRADED_STATUSES.has(raw) ? 'degraded' : raw;
+  }
+
+  function formatStatusLabel(status) {
+    if (!status) return '—';
+    const normalized = normalizeStatus(status);
+    return STATUS_LABELS[normalized] || 'Degraded';
   }
 
   function formatAge(ageSec) {
@@ -432,10 +450,10 @@
       }
 
       const tdSpeed = document.createElement('td');
-      tdSpeed.textContent = pt.speedSec == null ? '—' : pt.speedSec;
+      tdSpeed.textContent = pt.speedSec == null ? '—' : `${pt.speedSec} sec`;
 
       const tdStatus = document.createElement('td');
-      tdStatus.textContent = pt.status || '—';
+      tdStatus.textContent = formatStatusLabel(pt.status);
 
       tr.append(tdTime, tdFee, tdSpeed, tdStatus);
       els.table.appendChild(tr);

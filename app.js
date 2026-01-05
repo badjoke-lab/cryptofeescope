@@ -78,7 +78,14 @@ const state = {
 };
 let historyMeta = null;
 
-const VALID_STATUSES = ["all", "fast", "normal", "slow", "unknown", "error"];
+const VALID_STATUSES = ["all", "fast", "normal", "slow", "degraded"];
+const STATUS_LABELS = {
+  fast: "Fast",
+  normal: "Normal",
+  slow: "Slow",
+  degraded: "Degraded",
+};
+const DEGRADED_STATUSES = new Set(["unknown", "error", "degraded"]);
 const VALID_SORTS = [
   "default",
   "fee_asc",
@@ -240,6 +247,16 @@ function compareWithNullsLast(a, b, direction = "asc") {
   return 0;
 }
 
+function normalizeStatus(status) {
+  const raw = (status || "unknown").toLowerCase();
+  return DEGRADED_STATUSES.has(raw) ? "degraded" : raw;
+}
+
+function formatStatusLabel(status) {
+  const normalized = normalizeStatus(status);
+  return STATUS_LABELS[normalized] || "Degraded";
+}
+
 function sortRows(rows) {
   const sortKey = state.sortBy;
   if (sortKey === "default") return rows;
@@ -275,7 +292,7 @@ function getVisibleRows() {
   const baseRows = state.allRows || [];
   const query = state.searchQuery.trim().toLowerCase();
   const filtered = baseRows.filter((row) => {
-    const rowStatus = (row.status || "unknown").toLowerCase();
+    const rowStatus = normalizeStatus(row.status);
     const statusMatch = state.filterStatus === "all" || rowStatus === state.filterStatus;
     return statusMatch && matchesSearch(row, query);
   });
@@ -287,7 +304,7 @@ function renderTable(rows) {
   const tbodyMobile = document.getElementById("fee-table-body-mobile");
   const header = document.getElementById("fee-header");
   if (header) {
-    header.textContent = state.currency === "usd" ? "Fee (est. USD)" : "Fee (est. JPY)";
+    header.textContent = "Estimated Tx Fee (USD/JPY)";
   }
   const emptyNote = document.getElementById("empty-note");
 
@@ -330,7 +347,8 @@ function renderTable(rows) {
     const feeTitle = buildFeeTitle(chain.feeUSD, chain.feeJPY, currencyCode);
     const speedStr = chain.speedSec != null ? `${chain.speedSec} sec` : "—";
     const speedApprox = speedStr === "—" ? speedStr : `≈ ${speedStr}`;
-    const statusStr = (chain.status || "unknown").toLowerCase();
+    const statusClass = normalizeStatus(chain.status);
+    const statusLabel = formatStatusLabel(chain.status);
     const changePct = chain.priceChange24hPct;
     let changeText = "—";
     let changeClass = "change-flat";
@@ -348,7 +366,7 @@ function renderTable(rows) {
 
     if (tbody) {
       const tr = document.createElement("tr");
-      tr.classList.add("fee-row", `status-${statusStr}`);
+      tr.classList.add("fee-row", `status-${statusClass}`);
 
       const tdChain = document.createElement("td");
       tdChain.classList.add("col-chain", "chain-cell");
@@ -387,8 +405,8 @@ function renderTable(rows) {
       tdSpeed.textContent = speedApprox;
 
       const tdStatus = document.createElement("td");
-      tdStatus.classList.add("col-status", "status-cell", `status-${statusStr}`);
-      tdStatus.textContent = statusStr;
+      tdStatus.classList.add("col-status", "status-cell", `status-${statusClass}`);
+      tdStatus.textContent = statusLabel;
 
       tr.append(tdChain, tdTicker, tdFee, tdChange, tdSpeed, tdStatus);
       tbody.appendChild(tr);
@@ -396,7 +414,7 @@ function renderTable(rows) {
 
     if (tbodyMobile) {
       const trMobile = document.createElement("tr");
-      trMobile.classList.add("fee-row-mobile", `status-${statusStr}`);
+      trMobile.classList.add("fee-row-mobile", `status-${statusClass}`);
 
       const tdMobileLeft = document.createElement("td");
       tdMobileLeft.classList.add("cell-mobile-left");
@@ -428,7 +446,7 @@ function renderTable(rows) {
       const changeValueMobile = document.createElement("span");
       changeValueMobile.classList.add("change-value-mobile", changeClass);
       changeValueMobile.textContent = changeText;
-      metricsTop.append("Fee (est.) ", feeValueMobile, " · 24h ", changeValueMobile);
+      metricsTop.append("Estimated Tx Fee (USD/JPY) ", feeValueMobile, " · 24h ", changeValueMobile);
 
       const metricsBottom = document.createElement("div");
       metricsBottom.classList.add("metrics-bottom");
@@ -436,8 +454,8 @@ function renderTable(rows) {
       speedMobile.classList.add("speed-mobile");
       speedMobile.textContent = speedApprox;
       const statusMobile = document.createElement("span");
-      statusMobile.classList.add("status-mobile", "status-cell", `status-${statusStr}`);
-      statusMobile.textContent = statusStr;
+      statusMobile.classList.add("status-mobile", "status-cell", `status-${statusClass}`);
+      statusMobile.textContent = statusLabel;
       metricsBottom.append(speedMobile, " · ", statusMobile);
 
       tdMobileRight.append(metricsTop, metricsBottom);

@@ -386,6 +386,7 @@ tbody tr:hover{
 .status-dot.fast{background:var(--good);}
 .status-dot.normal{background:var(--muted);}
 .status-dot.slow{background:var(--warn);}
+.status-dot.degraded{background:var(--muted);}
 .mono{
   font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -433,6 +434,7 @@ tbody tr:hover{
 .status-cell.status-normal{color:var(--muted);}
 .status-cell.status-slow{color:var(--warn);}
 .status-cell.status-unknown{color:var(--muted);}
+.status-cell.status-degraded{color:var(--muted);}
 .change-cell{
   text-align:right;
   font-variant-numeric:tabular-nums;

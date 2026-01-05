@@ -77,15 +77,15 @@
 
           <div class="summary-grid" id="summaryGrid">
             <div class="summary-card">
-              <div class="label">Avg fee (USD)</div>
+              <div class="label">Avg Estimated Tx Fee (USD/JPY)</div>
               <div class="value" id="avgFee">—</div>
             </div>
             <div class="summary-card">
-              <div class="label">Min fee (USD)</div>
+              <div class="label">Min Estimated Tx Fee (USD/JPY)</div>
               <div class="value" id="minFee">—</div>
             </div>
             <div class="summary-card">
-              <div class="label">Max fee (USD)</div>
+              <div class="label">Max Estimated Tx Fee (USD/JPY)</div>
               <div class="value" id="maxFee">—</div>
             </div>
             <div class="summary-card">
@@ -103,20 +103,21 @@
       <article class="card">
         <div class="inner">
           <div class="chart-header">
-            <h2 class="card-title">Fee history</h2>
+            <h2 class="card-title">Estimated Tx Fee (USD/JPY) history</h2>
             <div class="chart-subtle">History updated: <span id="historyFreshness">Loading…</span></div>
           </div>
           <div class="chart-wrap">
             <canvas id="historyChart" height="260"></canvas>
           </div>
           <div class="chart-note">Chart uses raw values; displayed labels may be rounded.</div>
+          <div class="chart-note">Charts do not interpolate missing points. — means insufficient data.</div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Time</th>
-                  <th>feeUsd</th>
-                  <th>speedSec</th>
+                  <th>Estimated Tx Fee (USD/JPY)</th>
+                  <th>Estimated Confirmation Time (sec)</th>
                   <th>Status</th>
                 </tr>
               </thead>
