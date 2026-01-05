@@ -47,6 +47,9 @@ const CHAINS = new Set([
   "xrp",
   "arbitrum",
   "optimism",
+  "gnosis",
+  "fantom",
+  "cronos",
 ]);
 
 const WINDOW_REQUIREMENTS: Record<

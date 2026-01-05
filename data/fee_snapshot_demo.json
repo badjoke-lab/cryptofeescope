@@ -131,6 +131,60 @@
         }
       }
     },
+    "gnosis": {
+      "label": "Gnosis Chain",
+      "feeUSD": 0.0042,
+      "feeJPY": 0.6585600000000001,
+      "speedSec": 8,
+      "status": "fast",
+      "updated": "2026-01-04T14:18:13.951Z",
+      "native": {
+        "amount": 0.00004,
+        "symbol": "GNO"
+      },
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "gnosis"
+        }
+      }
+    },
+    "fantom": {
+      "label": "Fantom",
+      "feeUSD": 0.0095,
+      "feeJPY": 1.4896,
+      "speedSec": 6,
+      "status": "fast",
+      "updated": "2026-01-04T14:18:13.951Z",
+      "native": {
+        "amount": 0.02,
+        "symbol": "FTM"
+      },
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "fantom"
+        }
+      }
+    },
+    "cronos": {
+      "label": "Cronos",
+      "feeUSD": 0.012,
+      "feeJPY": 1.8816,
+      "speedSec": 6,
+      "status": "fast",
+      "updated": "2026-01-04T14:18:13.951Z",
+      "native": {
+        "amount": 0.08,
+        "symbol": "CRO"
+      },
+      "source": {
+        "price": {
+          "provider": "coingecko-demo",
+          "id": "cronos"
+        }
+      }
+    },
     "arbitrum": {
       "label": "Arbitrum One",
       "feeUSD": 0.021584900000000004,

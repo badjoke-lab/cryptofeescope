@@ -89,7 +89,20 @@ const VALID_SORTS = [
   "chain_desc",
 ];
 
-const SHARED_CHAINS = ["btc", "eth", "bsc", "sol", "tron", "avax", "xrp", "arbitrum", "optimism"];
+const SHARED_CHAINS = [
+  "btc",
+  "eth",
+  "bsc",
+  "sol",
+  "tron",
+  "avax",
+  "xrp",
+  "arbitrum",
+  "optimism",
+  "gnosis",
+  "fantom",
+  "cronos",
+];
 const DEFAULT_CHAIN = "eth";
 
 const URL_STATE_DEFAULTS = {
@@ -119,6 +132,9 @@ const METHOD_ANCHORS = {
   tron: "tron",
   avax: "avax",
   xrp: "xrp",
+  gnosis: "gnosis",
+  fantom: "fantom",
+  cronos: "cronos",
 };
 
 function formatFiat(value, currency) {

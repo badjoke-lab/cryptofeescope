@@ -94,9 +94,11 @@
 
         <h3>Chain-level methodology</h3>
         <p class="hint">Click a ticker in the table (ⓘ) to jump to each section.</p>
+        <p class="hint">EVM chains: gasPrice via RPC, typical transfer gasLimit, price via CoinGecko (Gnosis Chain, Fantom, Cronos use the same model).</p>
         <ul>
           <li><a href="#btc">Bitcoin</a> · <a href="#eth">Ethereum</a> · <a href="#bsc">BSC</a> · <a href="#solana">Solana</a></li>
           <li><a href="#tron">TRON</a> · <a href="#avax">Avalanche</a> · <a href="#xrp">XRP Ledger</a> · <a href="#arbitrum">Arbitrum</a> · <a href="#optimism">Optimism</a></li>
+          <li><a href="#gnosis">Gnosis Chain</a> · <a href="#fantom">Fantom</a> · <a href="#cronos">Cronos</a></li>
         </ul>
 
         <h4 id="btc">BTC</h4>
@@ -144,6 +146,24 @@
         <h4 id="avax">AVAX</h4>
         <ul>
           <li>Assumption: C-Chain EVM-style fee model with a typical transfer.</li>
+          <li>Limits: congestion and gas price swings affect the paid fee.</li>
+        </ul>
+
+        <h4 id="gnosis">GNOSIS CHAIN</h4>
+        <ul>
+          <li>Assumption: EVM-style gasPrice from RPC with a typical transfer gas limit.</li>
+          <li>Limits: congestion and gas price swings affect the paid fee.</li>
+        </ul>
+
+        <h4 id="fantom">FANTOM</h4>
+        <ul>
+          <li>Assumption: EVM-style gasPrice from RPC with a typical transfer gas limit.</li>
+          <li>Limits: congestion and gas price swings affect the paid fee.</li>
+        </ul>
+
+        <h4 id="cronos">CRONOS</h4>
+        <ul>
+          <li>Assumption: EVM-style gasPrice from RPC with a typical transfer gas limit.</li>
           <li>Limits: congestion and gas price swings affect the paid fee.</li>
         </ul>
 

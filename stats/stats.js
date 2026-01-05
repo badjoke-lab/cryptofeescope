@@ -1,7 +1,20 @@
 (function initStatsPage(){
   const DEFAULT_CHAIN = 'eth';
   const DEFAULT_RANGE = '24h';
-  const CHAINS = ['btc','eth','bsc','sol','tron','avax','xrp','arbitrum','optimism'];
+  const CHAINS = [
+    'btc',
+    'eth',
+    'bsc',
+    'sol',
+    'tron',
+    'avax',
+    'xrp',
+    'arbitrum',
+    'optimism',
+    'gnosis',
+    'fantom',
+    'cronos',
+  ];
   const URL_STATE_DEFAULTS = {
     q: '',
     chains: [DEFAULT_CHAIN],

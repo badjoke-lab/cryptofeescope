@@ -63,6 +63,42 @@ module.exports = {
     ],
     etherscan: 'https://api.snowtrace.io/api?module=gastracker&action=gasoracle',
   },
+  gnosis: {
+    key: 'gnosis',
+    symbol: 'GNO',
+    type: 'evm',
+    gasLimit: 65000,
+    range: ranges.gnosis,
+    rpc: [
+      'https://rpc.gnosischain.com',
+      'https://gnosis-rpc.publicnode.com',
+      'https://rpc.ankr.com/gnosis',
+    ],
+  },
+  fantom: {
+    key: 'fantom',
+    symbol: 'FTM',
+    type: 'evm',
+    gasLimit: 65000,
+    range: ranges.fantom,
+    rpc: [
+      'https://rpc.ftm.tools',
+      'https://fantom-rpc.publicnode.com',
+      'https://rpc.ankr.com/fantom',
+    ],
+  },
+  cronos: {
+    key: 'cronos',
+    symbol: 'CRO',
+    type: 'evm',
+    gasLimit: 65000,
+    range: ranges.cronos,
+    rpc: [
+      'https://evm.cronos.org',
+      'https://cronos-rpc.publicnode.com',
+      'https://rpc.ankr.com/cronos',
+    ],
+  },
   sol: {
     key: 'sol',
     symbol: 'SOL',

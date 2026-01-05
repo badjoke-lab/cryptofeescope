@@ -60,6 +60,9 @@ const CHAINS = new Set([
   "xrp",
   "arbitrum",
   "optimism",
+  "gnosis",
+  "fantom",
+  "cronos",
 ]);
 
 const corsHeaders = {
@@ -194,4 +197,3 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 };
-

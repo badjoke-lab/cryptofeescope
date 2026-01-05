@@ -9,4 +9,7 @@ module.exports = {
   arb: { minUSD: 0.005, maxUSD: 3 },
   op: { minUSD: 0.005, maxUSD: 3 },
   base: { minUSD: 0.005, maxUSD: 3 },
+  gnosis: { minUSD: 0.001, maxUSD: 1 },
+  fantom: { minUSD: 0.001, maxUSD: 1 },
+  cronos: { minUSD: 0.001, maxUSD: 1 },
 };
