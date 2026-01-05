@@ -50,6 +50,9 @@ type FetchMetaRow = {
   last_fetch_failures: string | null;
   last_cache_used_at: number | null;
   last_cache_age_minutes: number | null;
+  last_run_invalid_count: number | null;
+  last_run_invalid_chains: string | null;
+  last_run_warning_chains: string | null;
 };
 
 const corsHeaders = {
@@ -95,6 +98,19 @@ function computeStale(
     return { stale: true, reason: "ok_too_old" };
   }
   return { stale: false, reason: null };
+}
+
+function parseStringArray(input: string | null | undefined): string[] {
+  if (!input) return [];
+  try {
+    const parsed = JSON.parse(input);
+    if (Array.isArray(parsed)) {
+      return parsed.map((entry) => String(entry));
+    }
+  } catch {
+    return [];
+  }
+  return [];
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
@@ -161,7 +177,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     let fetchMeta: FetchMetaRow | null = null;
     try {
       const fetchStmt = env.DB.prepare(
-        `SELECT last_fetch_error, last_fetch_error_at, last_fetch_failure_key, last_fetch_failures, last_cache_used_at, last_cache_age_minutes
+        `SELECT last_fetch_error, last_fetch_error_at, last_fetch_failure_key, last_fetch_failures, last_cache_used_at, last_cache_age_minutes,
+          last_run_invalid_count, last_run_invalid_chains, last_run_warning_chains
          FROM fetch_meta
          WHERE id = 1;`
       );
@@ -191,6 +208,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 
     const lastFetchErrorAtIso = toIsoString(fetchMeta?.last_fetch_error_at ?? null);
     const lastCacheUsedAtIso = toIsoString(fetchMeta?.last_cache_used_at ?? null);
+    const invalidChains = parseStringArray(fetchMeta?.last_run_invalid_chains);
+    const warningChains = parseStringArray(fetchMeta?.last_run_warning_chains);
     const body = {
       ok: true,
       data: {
@@ -221,6 +240,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
         cacheUsed: fetchMeta?.last_cache_used_at != null,
         cacheAgeMinutes: fetchMeta?.last_cache_age_minutes ?? null,
         lastCacheUsedAt: lastCacheUsedAtIso,
+        lastRunInvalidCount: fetchMeta?.last_run_invalid_count ?? 0,
+        lastRunInvalidChains: invalidChains,
+        lastRunWarnings: warningChains,
       },
     };
 
