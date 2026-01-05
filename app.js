@@ -173,6 +173,32 @@ function normalizeMetaPayload(payload) {
   return payload?.data ?? payload;
 }
 
+function formatHealthDetailValue(value) {
+  if (value == null) return "—";
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "—";
+  }
+  if (typeof value === "string") return value.trim() ? value : "—";
+  return "—";
+}
+
+function renderHealthDetails(meta) {
+  const details = {
+    lastWriteAt: meta?.lastWriteAt,
+    lastOkAt: meta?.lastOkAt,
+    points24h: meta?.points24h,
+    maxGapHours24h: meta?.maxGapHours24h,
+    lastFetchError: meta?.lastFetchError,
+    lastFetchErrorAt: meta?.lastFetchErrorAt,
+  };
+  Object.entries(details).forEach(([key, value]) => {
+    const el = document.querySelector(`[data-health-detail="${key}"]`);
+    if (el) {
+      el.textContent = formatHealthDetailValue(value);
+    }
+  });
+}
+
 function parseIsoToUnix(iso) {
   if (typeof iso !== "string") return null;
   const parsed = Date.parse(iso);
@@ -483,6 +509,7 @@ function renderHealthBadge() {
   const badgeEl = document.getElementById("healthBadge");
   if (!badgeEl) return;
   const meta = normalizeMetaPayload(historyMeta);
+  renderHealthDetails(meta);
   if (!meta) {
     badgeEl.textContent = "Health: —";
     badgeEl.classList.remove("stale");
@@ -523,6 +550,23 @@ function renderHealthBadge() {
     label += ` (gap ${Math.round(gapHours)}h)`;
   }
   badgeEl.textContent = label;
+}
+
+function setupHealthDetailsPopover() {
+  const details = document.getElementById("healthDetails");
+  if (!details) return;
+
+  document.addEventListener("click", (event) => {
+    if (!details.open) return;
+    if (details.contains(event.target)) return;
+    details.removeAttribute("open");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && details.open) {
+      details.removeAttribute("open");
+    }
+  });
 }
 
 // ----- Lifecycle -----
@@ -836,6 +880,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindTableControls();
   bindCurrencyButtons();
   bindNavToggle();
+  setupHealthDetailsPopover();
   loadSnapshotAndRender();
   fetchHistoryMeta();
   setInterval(loadSnapshotAndRender, 60_000);
