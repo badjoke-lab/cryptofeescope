@@ -22,6 +22,11 @@
       <div class="spacer"></div>
       <div class="health-badge" id="healthBadge">Health: —</div>
       <div class="toolbar">
+        <button id="share-button" class="btn btn-ghost" type="button">
+          <span class="icon" aria-hidden="true">🔗</span>
+          <span class="label">Share</span>
+        </button>
+        <span id="share-feedback" class="share-feedback hidden" role="status" aria-live="polite"></span>
         <button id="themeBtn" class="btn btn-ghost" type="button" aria-label="Toggle theme">🌞</button>
         <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">
           <span class="bar-line" aria-hidden="true"></span>
@@ -158,6 +163,7 @@
   <script src="../lib/pageState.js"></script>
   <script src="../lib/stateSync.js"></script>
   <script src="../lib/donateCta.js"></script>
+  <script src="../lib/shareUrl.js"></script>
   <script src="./stats.js"></script>
   <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "dd7d7c14341f438688bd4e475eee54e4"}'></script>
 </body>

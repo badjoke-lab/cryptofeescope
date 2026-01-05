@@ -97,6 +97,13 @@ header{
   display:flex;
   gap:8px;
 }
+.share-feedback{
+  font-size:12px;
+  color:var(--muted);
+  align-self:center;
+}
+.share-feedback.success{color:var(--good);}
+.share-feedback.error{color:var(--bad);}
 
 .nav-toggle{display:none;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line);border-radius:10px;background:transparent;cursor:pointer;}
 .nav-toggle .bar-line{display:block;width:16px;height:2px;background:var(--fg);border-radius:1px;box-shadow:0 5px var(--fg),0 -5px var(--fg);}
