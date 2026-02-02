@@ -7,7 +7,7 @@ A Cloudflare Scheduled Worker that fetches the latest fee snapshot JSON and writ
 Bindings and variables are defined in `wrangler.toml`:
 
 - **D1 Binding**: `DB` (points to your `cryptofeescope` D1 database)
-- **Environment variable**: `SNAPSHOT_URL` (defaults to `https://cryptofeescope.pages.dev/data/fee_snapshot_demo.json`)
+- **Environment variable**: `SNAPSHOT_URL` (defaults to `https://cfs.badjoke-lab.com/data/fee_snapshot_demo.json`)
 - **Cron trigger**: `*/10 * * * *`
 
 Update `database_id` in `wrangler.toml` to match your Cloudflare D1 database.

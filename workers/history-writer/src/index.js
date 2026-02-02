@@ -1,6 +1,6 @@
 import { validateSnapshot } from "./validateSnapshot.mjs";
 
-const DEFAULT_SNAPSHOT_URL = "https://cryptofeescope.pages.dev/data/fee_snapshot_demo.json";
+const DEFAULT_SNAPSHOT_URL = "https://cfs.badjoke-lab.com/data/fee_snapshot_demo.json";
 const RETENTION_DAYS = 30;
 const PRUNE_BATCH_LIMIT = 5000;
 const FETCH_TIMEOUT_MS = 10000;

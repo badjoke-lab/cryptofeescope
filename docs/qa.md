@@ -2,7 +2,7 @@
 
 ## Meta
 - Confirmed date: 2026-01-05
-- Confirmed URL (prod): https://cryptofeescope.pages.dev/
+- Confirmed URL (prod): https://cfs.badjoke-lab.com/
 - Notes: Use Chrome DevTools device toolbar for width checks.
 
 ## Optional: Screenshot Procedure
