@@ -2,13 +2,9 @@ name = "cryptofeescope-history-writer"
 main = "src/index.js"
 compatibility_date = "2024-06-20"
 
-[triggers]
-crons = ["*/10 * * * *"]
-
-[[d1_databases]]
-binding = "DB"
-database_name = "cryptofeescope"
-database_id = "f23e7ea8-1f67-4b7f-9104-664cd02f34fe"
+# Emergency cost guard:
+# Cron trigger and D1 binding were disabled after accidental D1 Rows Written overage.
+# Do not re-enable without an explicit write budget, idempotency checks, and budget alerts.
 
 [vars]
 SNAPSHOT_URL = "https://cfs.badjoke-lab.com/data/fee_snapshot_demo.json"
