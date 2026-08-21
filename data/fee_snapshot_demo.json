@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-21T15:52:41.222Z",
+  "generatedAt": "2026-08-21T16:31:46.863Z",
   "vsCurrencies": [
     "usd",
     "jpy"
@@ -7,11 +7,11 @@
   "chains": {
     "btc": {
       "label": "Bitcoin",
-      "feeUSD": 2.32122,
-      "feeJPY": 368.97426,
+      "feeUSD": 2.32023,
+      "feeJPY": 368.81301,
       "speedSec": 600,
       "status": "normal",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.00003,
         "symbol": "BTC"
@@ -25,11 +25,11 @@
     },
     "eth": {
       "label": "Ethereum",
-      "feeUSD": 0.7561323000000002,
-      "feeJPY": 120.19297500000003,
+      "feeUSD": 0.7562709000000002,
+      "feeJPY": 120.21345000000002,
       "speedSec": 30,
       "status": "normal",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.00031500000000000007,
         "symbol": "ETH"
@@ -43,11 +43,11 @@
     },
     "bsc": {
       "label": "BNB Smart Chain",
-      "feeUSD": 0.07136115,
-      "feeJPY": 11.343465,
+      "feeUSD": 0.07124145,
+      "feeJPY": 11.324250000000001,
       "speedSec": 5,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.000105,
         "symbol": "BNB"
@@ -61,11 +61,11 @@
     },
     "sol": {
       "label": "Solana",
-      "feeUSD": 0.00045725000000000003,
-      "feeJPY": 0.0726821,
+      "feeUSD": 0.0004571500000000001,
+      "feeJPY": 0.0726587,
       "speedSec": 10,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.000005,
         "symbol": "SOL"
@@ -79,11 +79,11 @@
     },
     "tron": {
       "label": "Tron",
-      "feeUSD": 0.033992800000000004,
-      "feeJPY": 5.4030000000000005,
+      "feeUSD": 0.0340273,
+      "feeJPY": 5.409000000000001,
       "speedSec": 5,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.1,
         "symbol": "TRX"
@@ -97,11 +97,11 @@
     },
     "avax": {
       "label": "Avalanche C-Chain",
-      "feeUSD": 0.00762,
-      "feeJPY": 1.2115799999999999,
+      "feeUSD": 0.0076100000000000004,
+      "feeJPY": 1.20912,
       "speedSec": 15,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.001,
         "symbol": "AVAX"
@@ -116,10 +116,10 @@
     "xrp": {
       "label": "XRP Ledger",
       "feeUSD": 0.000014,
-      "feeJPY": 0.0022243000000000002,
+      "feeJPY": 0.0022299000000000004,
       "speedSec": 5,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.00001,
         "symbol": "XRP"
@@ -133,11 +133,11 @@
     },
     "arbitrum": {
       "label": "Arbitrum One",
-      "feeUSD": 0.009789100000000002,
-      "feeJPY": 1.556,
+      "feeUSD": 0.0098378,
+      "feeJPY": 1.564,
       "speedSec": 15,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.1,
         "symbol": "ARB"
@@ -151,11 +151,11 @@
     },
     "optimism": {
       "label": "Optimism",
-      "feeUSD": 0.010483300000000001,
-      "feeJPY": 1.6660000000000001,
+      "feeUSD": 0.010534300000000002,
+      "feeJPY": 1.674,
       "speedSec": 15,
       "status": "fast",
-      "updated": "2026-08-21T15:52:41.222Z",
+      "updated": "2026-08-21T16:31:46.863Z",
       "native": {
         "amount": 0.1,
         "symbol": "OP"
